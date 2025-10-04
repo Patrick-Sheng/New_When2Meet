@@ -56,32 +56,35 @@ export function EventView({ event, onBack }: EventViewProps) {
   const shareableLink = `${window.location.origin}?event=${event.id}`;
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <button
-        onClick={onBack}
-        className="mb-6 text-blue-600 hover:text-blue-800 flex items-center"
-      >
+    <div className="max-w-4xl">
+      <button onClick={onBack} className="btn-back mb-6">
         ← Back to Home
       </button>
 
-      <div className="bg-white p-8 rounded-lg shadow mb-6">
-        <h2 className="text-3xl font-bold mb-2">{event.title}</h2>
+      <div className="card mb-6">
+        <h2 className="mb-2" style={{ fontSize: '2.5rem', fontWeight: '700', color: 'var(--gray-900)' }}>
+          {event.title}
+        </h2>
         {event.description && (
-          <p className="text-gray-600 mb-4">{event.description}</p>
+          <p className="mb-4" style={{ color: 'var(--gray-600)', fontSize: '1.125rem' }}>
+            {event.description}
+          </p>
         )}
 
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <p className="text-sm font-medium text-gray-700 mb-2">Share this event:</p>
-          <div className="flex gap-2">
+        <div className="share-box">
+          <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.75rem' }}>
+            Share this event:
+          </p>
+          <div className="share-input-group">
             <input
               type="text"
               value={shareableLink}
               readOnly
-              className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded text-sm"
+              className="input share-input"
             />
             <button
               onClick={() => navigator.clipboard.writeText(shareableLink)}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+              className="btn-copy"
             >
               Copy
             </button>
@@ -89,18 +92,20 @@ export function EventView({ event, onBack }: EventViewProps) {
         </div>
       </div>
 
-      <div className="bg-white p-8 rounded-lg shadow">
-        <h3 className="text-xl font-semibold mb-4">Your Availability</h3>
+      <div className="card">
+        <h3 className="mb-4" style={{ fontSize: '1.5rem', fontWeight: '600', color: 'var(--gray-900)' }}>
+          Your Availability
+        </h3>
 
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
             Your Name
           </label>
           <input
             type="text"
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="input"
             placeholder="Enter your name"
           />
         </div>
@@ -112,49 +117,54 @@ export function EventView({ event, onBack }: EventViewProps) {
             const isSelected = selectedSlots.has(slot.id);
 
             return (
-              <div key={slot.id} className="relative">
+              <div key={slot.id}>
                 <button
                   onClick={() => toggleSlot(slot.id)}
-                  className={`w-full p-4 rounded-lg border-2 transition text-left ${isSelected
-                      ? 'border-green-500 bg-green-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                    }`}
+                  className={`time-slot w-full ${isSelected ? 'selected' : ''}`}
+                  style={{ display: 'block' }}
                 >
                   <div className="flex justify-between items-center">
-                    <div>
-                      <div className="font-medium">
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: '600', fontSize: '1.125rem', color: 'var(--gray-900)' }}>
                         {new Date(slot.date).toLocaleDateString('en-US', {
                           weekday: 'long',
                           month: 'long',
                           day: 'numeric'
                         })}
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginTop: '0.25rem' }}>
                         {slot.startHour.toString().padStart(2, '0')}:00 - {slot.endHour.toString().padStart(2, '0')}:00
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-blue-600">
+                    <div style={{ textAlign: 'right' }}>
+                      <div className="time-slot-count">
                         {count}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div style={{ fontSize: '0.75rem', color: 'var(--gray-600)' }}>
                         {count === 1 ? 'person' : 'people'}
                       </div>
                     </div>
                   </div>
                   {count > 0 && (
-                    <div className="mt-2 text-sm text-gray-600">
+                    <div className="mt-2" style={{ fontSize: '0.875rem', color: 'var(--gray-600)', textAlign: 'left' }}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setShowingUser(showingUser === slot.id ? null : slot.id);
                         }}
-                        className="text-blue-600 hover:text-blue-800"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--primary-blue)',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontWeight: '500'
+                        }}
                       >
                         {showingUser === slot.id ? 'Hide' : 'Show'} names
                       </button>
                       {showingUser === slot.id && (
-                        <div className="mt-2 text-xs">
+                        <div className="mt-2" style={{ fontSize: '0.75rem', fontWeight: '500' }}>
                           {users.join(', ')}
                         </div>
                       )}
@@ -168,7 +178,8 @@ export function EventView({ event, onBack }: EventViewProps) {
 
         <button
           onClick={handleSubmitAvailability}
-          className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-medium"
+          className="btn btn-primary w-full"
+          style={{ padding: '1rem 1.5rem', fontSize: '1rem' }}
         >
           Submit Availability
         </button>
