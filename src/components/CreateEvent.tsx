@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { Event, TimeSlot } from '../types';
 import { mockEvents } from '../mockData';
 
@@ -14,11 +14,90 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
   const [dates, setDates] = useState<string[]>([]);
   const [startHour, setStartHour] = useState(9);
   const [endHour, setEndHour] = useState(17);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartDate, setDragStartDate] = useState<string | null>(null);
+  const draggedDatesRef = useRef<Set<string>>(new Set());
 
-  const addDate = (date: string) => {
-    if (!dates.includes(date)) {
-      setDates([...dates, date]);
+  // Generate calendar months (3 months from today)
+  const generateCalendarMonths = () => {
+    const today = new Date();
+    const months: { monthKey: string; monthName: string; dates: (Date | null)[] }[] = [];
+
+    for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
+      const currentMonth = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth();
+
+      // Get first day of month and last day of month
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const daysInMonth = lastDay.getDate();
+      const startDayOfWeek = firstDay.getDay(); // 0 = Sunday, 6 = Saturday
+
+      const monthKey = `${year}-${month}`;
+      const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      const dates: (Date | null)[] = [];
+
+      // Add empty cells for days before month starts
+      for (let i = 0; i < startDayOfWeek; i++) {
+        dates.push(null);
+      }
+
+      // Add all days in the month
+      for (let day = 1; day <= daysInMonth; day++) {
+        dates.push(new Date(year, month, day));
+      }
+
+      months.push({ monthKey, monthName, dates });
     }
+
+    return months;
+  };
+
+  const calendarMonths = generateCalendarMonths();
+
+  const formatDateString = (date: Date): string => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const handleMouseDown = (dateStr: string) => {
+    setIsDragging(true);
+    setDragStartDate(dateStr);
+    draggedDatesRef.current = new Set([dateStr]);
+
+    if (dates.includes(dateStr)) {
+      // Remove date if already selected
+      setDates(dates.filter(d => d !== dateStr));
+    } else {
+      // Add date if not selected
+      setDates([...dates, dateStr]);
+    }
+  };
+
+  const handleMouseEnter = (dateStr: string) => {
+    if (!isDragging || !dragStartDate) return;
+
+    // Avoid re-processing the same date
+    if (draggedDatesRef.current.has(dateStr)) return;
+
+    draggedDatesRef.current.add(dateStr);
+
+    const isRemoving = dates.includes(dragStartDate);
+
+    if (isRemoving) {
+      setDates(dates.filter(d => d !== dateStr));
+    } else {
+      if (!dates.includes(dateStr)) {
+        setDates([...dates, dateStr]);
+      }
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setDragStartDate(null);
+    draggedDatesRef.current.clear();
   };
 
   const removeDate = (date: string) => {
@@ -51,7 +130,7 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
   };
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-5xl" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
       <button onClick={onBack} className="btn-back mb-6">
         ← Back to Home
       </button>
@@ -88,27 +167,73 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
-              Add Dates *
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.75rem' }}>
+              Select Dates * (Click and drag to select multiple)
             </label>
-            <input
-              type="date"
-              onChange={(e) => addDate(e.target.value)}
-              className="input"
-            />
-            <div className="flex flex-wrap gap-2 mt-2">
-              {dates.map(date => (
-                <span key={date} className="tag">
-                  {new Date(date).toLocaleDateString()}
-                  <button
-                    onClick={() => removeDate(date)}
-                    className="tag-remove"
-                  >
-                    ×
-                  </button>
-                </span>
+
+            <div className="calendar-container">
+              {calendarMonths.map(({ monthKey, monthName, dates }) => (
+                <div key={monthKey} className="calendar-month">
+                  <h3 className="calendar-month-title">{monthName}</h3>
+
+                  <div className="calendar-grid">
+                    {/* Weekday headers */}
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="calendar-weekday">{day}</div>
+                    ))}
+
+                    {/* Date cells (including empty cells at start) */}
+                    {dates.map((date, index) => {
+                      if (date === null) {
+                        return <div key={`empty-${index}`} className="calendar-day-empty"></div>;
+                      }
+
+                      const dateStr = formatDateString(date);
+                      const isSelected = dates.includes(dateStr);
+                      const isToday = formatDateString(new Date()) === dateStr;
+                      const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
+
+                      return (
+                        <div
+                          key={dateStr}
+                          className={`calendar-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}`}
+                          onMouseDown={() => !isPast && handleMouseDown(dateStr)}
+                          onMouseEnter={() => !isPast && handleMouseEnter(dateStr)}
+                          style={{
+                            userSelect: 'none',
+                            cursor: isPast ? 'not-allowed' : 'pointer',
+                            opacity: isPast ? 0.4 : 1
+                          }}
+                        >
+                          {date.getDate()}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
+
+            {dates.length > 0 && (
+              <div style={{ marginTop: '1rem' }}>
+                <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
+                  Selected Dates ({dates.length}):
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {dates.sort().map(date => (
+                    <span key={date} className="tag">
+                      {new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      <button
+                        onClick={() => removeDate(date)}
+                        className="tag-remove"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid-cols-2 gap-4">
