@@ -10,5 +10,5 @@ export const supabase = createClient(supabaseUrl, supabaseKey)
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
 })
