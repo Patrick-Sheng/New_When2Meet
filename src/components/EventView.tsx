@@ -11,9 +11,14 @@ export function EventView({ event, onBack }: EventViewProps) {
   const [userName, setUserName] = useState('');
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
   const [availabilities, setAvailabilities] = useState<Availability[]>(mockAvailabilities);
-  const [showingUser, setShowingUser] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Get unique users
+  const users = Array.from(new Set(availabilities.map(a => a.userName)));
 
   const toggleSlot = (slotId: string) => {
+    if (!isEditing || !userName) return;
+
     const newSelected = new Set(selectedSlots);
     if (newSelected.has(slotId)) {
       newSelected.delete(slotId);
@@ -23,12 +28,21 @@ export function EventView({ event, onBack }: EventViewProps) {
     setSelectedSlots(newSelected);
   };
 
-  const handleSubmitAvailability = () => {
+  const handleStartEditing = () => {
     if (!userName) {
-      alert('Please enter your name');
+      alert('Please enter your name first');
       return;
     }
 
+    // Load existing availability for this user
+    const userAvail = availabilities
+      .filter(a => a.userName === userName)
+      .map(a => a.timeSlotId);
+    setSelectedSlots(new Set(userAvail));
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
     // Remove old availabilities for this user
     const filtered = mockAvailabilities.filter(a => a.userName !== userName);
 
@@ -40,33 +54,38 @@ export function EventView({ event, onBack }: EventViewProps) {
     mockAvailabilities.length = 0;
     mockAvailabilities.push(...filtered);
     setAvailabilities([...mockAvailabilities]);
-    alert('Availability saved!');
+    setIsEditing(false);
+    setSelectedSlots(new Set());
   };
 
-  const getAvailabilityCount = (slotId: string) => {
+  const handleCancel = () => {
+    setIsEditing(false);
+    setSelectedSlots(new Set());
+  };
+
+  const isUserAvailable = (userName: string, slotId: string) => {
+    return availabilities.some(a => a.userName === userName && a.timeSlotId === slotId);
+  };
+
+  const getSlotCount = (slotId: string) => {
     return availabilities.filter(a => a.timeSlotId === slotId).length;
-  };
-
-  const getUsersForSlot = (slotId: string) => {
-    return availabilities
-      .filter(a => a.timeSlotId === slotId)
-      .map(a => a.userName);
   };
 
   const shareableLink = `${window.location.origin}?event=${event.id}`;
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-7xl">
       <button onClick={onBack} className="btn-back mb-6">
         ← Back to Home
       </button>
 
+      {/* Header */}
       <div className="card mb-6">
-        <h2 className="mb-2" style={{ fontSize: '2.5rem', fontWeight: '700', color: 'var(--gray-900)' }}>
+        <h2 className="mb-2" style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--gray-900)' }}>
           {event.title}
         </h2>
         {event.description && (
-          <p className="mb-4" style={{ color: 'var(--gray-600)', fontSize: '1.125rem' }}>
+          <p className="mb-4" style={{ color: 'var(--gray-600)', fontSize: '1rem' }}>
             {event.description}
           </p>
         )}
@@ -92,97 +111,147 @@ export function EventView({ event, onBack }: EventViewProps) {
         </div>
       </div>
 
-      <div className="card">
-        <h3 className="mb-4" style={{ fontSize: '1.5rem', fontWeight: '600', color: 'var(--gray-900)' }}>
-          Your Availability
-        </h3>
-
-        <div className="mb-6">
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
-            Your Name
-          </label>
+      {/* User Input Section */}
+      <div className="card mb-6">
+        <label style={{
+          display: 'block',
+          fontSize: '0.875rem',
+          fontWeight: '600',
+          color: 'var(--gray-700)',
+          marginBottom: '0.5rem'
+        }}>
+          Your Name
+        </label>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           <input
             type="text"
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
-            className="input"
             placeholder="Enter your name"
+            disabled={isEditing}
+            className="input"
+            style={{
+              flex: 1,
+              backgroundColor: isEditing ? 'var(--gray-100)' : 'white'
+            }}
           />
+          {!isEditing ? (
+            <button
+              onClick={handleStartEditing}
+              className="btn btn-primary"
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              Edit Availability
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleSave}
+                className="btn"
+                style={{
+                  backgroundColor: 'var(--green-500)',
+                  color: 'white'
+                }}
+              >
+                Save
+              </button>
+              <button
+                onClick={handleCancel}
+                className="btn"
+                style={{
+                  backgroundColor: 'var(--gray-600)',
+                  color: 'white'
+                }}
+              >
+                Cancel
+              </button>
+            </>
+          )}
         </div>
+      </div>
 
-        <div className="space-y-2 mb-6">
-          {event.timeSlots.map(slot => {
-            const count = getAvailabilityCount(slot.id);
-            const users = getUsersForSlot(slot.id);
-            const isSelected = selectedSlots.has(slot.id);
+      {/* Grid View */}
+      <div className="card" style={{ overflowX: 'auto' }}>
+        <table className="availability-table">
+          <thead>
+            <tr>
+              <th className="availability-table-header" style={{ minWidth: '180px' }}>
+                Time Slot
+              </th>
+              {users.map(user => (
+                <th key={user} className="availability-table-header availability-table-user">
+                  {user}
+                </th>
+              ))}
+              {isEditing && userName && !users.includes(userName) && (
+                <th className="availability-table-header availability-table-user" style={{ color: 'var(--primary-blue)' }}>
+                  {userName} (You)
+                </th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {event.timeSlots.map(slot => {
+              const count = getSlotCount(slot.id);
+              const intensity = Math.min(count / (users.length + 1), 1);
 
-            return (
-              <div key={slot.id}>
-                <button
-                  onClick={() => toggleSlot(slot.id)}
-                  className={`time-slot w-full ${isSelected ? 'selected' : ''}`}
-                  style={{ display: 'block' }}
-                >
-                  <div className="flex justify-between items-center">
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontWeight: '600', fontSize: '1.125rem', color: 'var(--gray-900)' }}>
-                        {new Date(slot.date).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          month: 'long',
-                          day: 'numeric'
-                        })}
-                      </div>
-                      <div style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginTop: '0.25rem' }}>
-                        {slot.startHour.toString().padStart(2, '0')}:00 - {slot.endHour.toString().padStart(2, '0')}:00
-                      </div>
+              return (
+                <tr key={slot.id}>
+                  <td className="availability-table-timeslot">
+                    <div style={{ fontWeight: '600', color: 'var(--gray-900)' }}>
+                      {new Date(slot.date).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric'
+                      })}
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div className="time-slot-count">
-                        {count}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--gray-600)' }}>
-                        {count === 1 ? 'person' : 'people'}
-                      </div>
+                    <div style={{ color: 'var(--gray-600)', fontSize: '0.75rem' }}>
+                      {slot.startHour.toString().padStart(2, '0')}:00 - {slot.endHour.toString().padStart(2, '0')}:00
                     </div>
-                  </div>
-                  {count > 0 && (
-                    <div className="mt-2" style={{ fontSize: '0.875rem', color: 'var(--gray-600)', textAlign: 'left' }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowingUser(showingUser === slot.id ? null : slot.id);
-                        }}
+                    <div style={{
+                      marginTop: '0.25rem',
+                      fontSize: '0.75rem',
+                      color: 'var(--primary-purple)',
+                      fontWeight: '600'
+                    }}>
+                      {count} {count === 1 ? 'person' : 'people'}
+                    </div>
+                  </td>
+                  {users.map(user => (
+                    <td key={user} className="availability-table-cell">
+                      <div
+                        className="availability-cell"
                         style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--primary-blue)',
-                          cursor: 'pointer',
-                          padding: 0,
-                          fontWeight: '500'
+                          backgroundColor: isUserAvailable(user, slot.id)
+                            ? `rgba(34, 197, 94, ${0.3 + intensity * 0.7})`
+                            : 'var(--gray-100)'
                         }}
                       >
-                        {showingUser === slot.id ? 'Hide' : 'Show'} names
-                      </button>
-                      {showingUser === slot.id && (
-                        <div className="mt-2" style={{ fontSize: '0.75rem', fontWeight: '500' }}>
-                          {users.join(', ')}
-                        </div>
-                      )}
-                    </div>
+                        {isUserAvailable(user, slot.id) ? '✓' : ''}
+                      </div>
+                    </td>
+                  ))}
+                  {isEditing && userName && !users.includes(userName) && (
+                    <td className="availability-table-cell">
+                      <div
+                        onClick={() => toggleSlot(slot.id)}
+                        className="availability-cell availability-cell-editable"
+                        style={{
+                          backgroundColor: selectedSlots.has(slot.id)
+                            ? 'var(--green-500)'
+                            : 'var(--gray-100)',
+                          borderColor: selectedSlots.has(slot.id) ? '#16a34a' : 'var(--gray-300)'
+                        }}
+                      >
+                        {selectedSlots.has(slot.id) ? '✓' : ''}
+                      </div>
+                    </td>
                   )}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-
-        <button
-          onClick={handleSubmitAvailability}
-          className="btn btn-primary w-full"
-          style={{ padding: '1rem 1.5rem', fontSize: '1rem' }}
-        >
-          Submit Availability
-        </button>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
