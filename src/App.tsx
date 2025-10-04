@@ -1,7 +1,33 @@
-import { useState } from 'react'
+import { useState } from 'react';
+import type { Event } from './types';
+import { mockEvents } from './mockData';
+import { HomeView } from './components/HomeView';
+import { CreateEvent } from './components/CreateEvent';
+import { EventView } from './components/EventView';
 
 function App() {
-  const [view, setView] = useState<'home' | 'create' | 'event'>('home')
+  const [view, setView] = useState<'home' | 'create' | 'event'>('home');
+  const [currentEvent, setCurrentEvent] = useState<Event | null>(null);
+  const [events, setEvents] = useState<Event[]>(mockEvents);
+
+  const handleCreateClick = () => {
+    setView('create');
+  };
+
+  const handleEventCreated = (event: Event) => {
+    setCurrentEvent(event);
+    setView('event');
+  };
+
+  const handleEventSelect = (event: Event) => {
+    setCurrentEvent(event);
+    setView('event');
+  };
+
+  const handleBackToHome = () => {
+    setView('home');
+    setCurrentEvent(null);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -13,53 +39,30 @@ function App() {
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         {view === 'home' && (
-          <div className="text-center">
-            <h2 className="text-2xl font-semibold mb-4">Welcome!</h2>
-            <p className="text-gray-600 mb-8">
-              Find the best time for your group to meet
-            </p>
-            <div className="space-x-4">
-              <button
-                onClick={() => setView('create')}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition"
-              >
-                Create New Event
-              </button>
-              <button className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 transition">
-                Join Existing Event
-              </button>
-            </div>
-          </div>
+          <HomeView
+            events={events}
+            onCreateClick={handleCreateClick}
+            onEventSelect={handleEventSelect}
+          />
         )}
 
         {view === 'create' && (
-          <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow">
-            <h2 className="text-2xl font-semibold mb-6">Create New Event</h2>
-            <p className="text-gray-600">Event creation form coming soon...</p>
-            <button
-              onClick={() => setView('home')}
-              className="mt-4 text-blue-600 hover:text-blue-800"
-            >
-              ← Back to Home
-            </button>
-          </div>
+          <CreateEvent
+            onBack={handleBackToHome}
+            onEventCreated={handleEventCreated}
+            setEvents={setEvents}
+          />
         )}
 
-        {view === 'event' && (
-          <div className="bg-white p-8 rounded-lg shadow">
-            <h2 className="text-2xl font-semibold mb-6">Event View</h2>
-            <p className="text-gray-600">Event details coming soon...</p>
-            <button
-              onClick={() => setView('home')}
-              className="mt-4 text-blue-600 hover:text-blue-800"
-            >
-              ← Back to Home
-            </button>
-          </div>
+        {view === 'event' && currentEvent && (
+          <EventView
+            event={currentEvent}
+            onBack={handleBackToHome}
+          />
         )}
       </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
