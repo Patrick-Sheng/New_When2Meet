@@ -11,7 +11,7 @@ type CreateEventProps = {
 export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [dates, setDates] = useState<string[]>([]);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [startHour, setStartHour] = useState(9);
   const [endHour, setEndHour] = useState(17);
   const [isDragging, setIsDragging] = useState(false);
@@ -58,7 +58,10 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
   const calendarMonths = generateCalendarMonths();
 
   const formatDateString = (date: Date): string => {
-    return date.toISOString().split('T')[0];
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const handleMouseDown = (dateStr: string) => {
@@ -66,12 +69,12 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
     setDragStartDate(dateStr);
     draggedDatesRef.current = new Set([dateStr]);
 
-    if (dates.includes(dateStr)) {
+    if (selectedDates.includes(dateStr)) {
       // Remove date if already selected
-      setDates(dates.filter(d => d !== dateStr));
+      setSelectedDates(selectedDates.filter(d => d !== dateStr));
     } else {
       // Add date if not selected
-      setDates([...dates, dateStr]);
+      setSelectedDates([...selectedDates, dateStr]);
     }
   };
 
@@ -83,13 +86,13 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
 
     draggedDatesRef.current.add(dateStr);
 
-    const isRemoving = dates.includes(dragStartDate);
+    const isRemoving = selectedDates.includes(dragStartDate);
 
     if (isRemoving) {
-      setDates(dates.filter(d => d !== dateStr));
+      setSelectedDates(selectedDates.filter(d => d !== dateStr));
     } else {
-      if (!dates.includes(dateStr)) {
-        setDates([...dates, dateStr]);
+      if (!selectedDates.includes(dateStr)) {
+        setSelectedDates([...selectedDates, dateStr]);
       }
     }
   };
@@ -101,16 +104,16 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
   };
 
   const removeDate = (date: string) => {
-    setDates(dates.filter(d => d !== date));
+    setSelectedDates(selectedDates.filter(d => d !== date));
   };
 
   const handleCreateEvent = () => {
-    if (!title || dates.length === 0) {
+    if (!title || selectedDates.length === 0) {
       alert('Please enter a title and select at least one date');
       return;
     }
 
-    const timeSlots: TimeSlot[] = dates.map(date => ({
+    const timeSlots: TimeSlot[] = selectedDates.map(date => ({
       id: `${date}-${startHour}-${endHour}`,
       date,
       startHour,
@@ -189,9 +192,11 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
                       }
 
                       const dateStr = formatDateString(date);
-                      const isSelected = dates.includes(dateStr);
-                      const isToday = formatDateString(new Date()) === dateStr;
-                      const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
+                      const isSelected = selectedDates.includes(dateStr);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const isToday = date.getTime() === today.getTime();
+                      const isPast = date < today;
 
                       return (
                         <div
@@ -214,13 +219,13 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
               ))}
             </div>
 
-            {dates.length > 0 && (
+            {selectedDates.length > 0 && (
               <div style={{ marginTop: '1rem' }}>
                 <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
-                  Selected Dates ({dates.length}):
+                  Selected Dates ({selectedDates.length}):
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {dates.sort().map(date => (
+                  {selectedDates.sort().map(date => (
                     <span key={date} className="tag">
                       {new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       <button
