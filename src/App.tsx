@@ -1,18 +1,19 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
+import HomeView from './components/HomeView';
+import CreateEvent from './components/CreateEvent';
+import EventView from './components/EventView';
 import type { Event } from './types';
-import { mockEvents } from './mockData';
-import { HomeView } from './components/HomeView';
-import { CreateEvent } from './components/CreateEvent';
-import { EventView } from './components/EventView';
+
+// Mock data
+export const mockEvents: Event[] = [];
+export const mockAvailabilities: any[] = [];
 
 function App() {
-  const [view, setView] = useState<'home' | 'create' | 'event'>('home');
+  const [view, setView] = useState('home');
   const [currentEvent, setCurrentEvent] = useState<Event | null>(null);
   const [events, setEvents] = useState<Event[]>(mockEvents);
 
-  const handleCreateClick = () => {
-    setView('create');
-  };
+  const handleCreateClick = () => setView('create');
 
   const handleEventCreated = (event: Event) => {
     setCurrentEvent(event);
@@ -30,14 +31,14 @@ function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div className="app-container">
       <header className="app-header">
-        <div className="max-w-7xl px-4">
+        <div className="app-header-content">
           <h1>When2Meet Clone</h1>
         </div>
       </header>
 
-      <main className="max-w-7xl px-4 py-8">
+      <main className="app-main">
         {view === 'home' && (
           <HomeView
             events={events}
@@ -55,10 +56,7 @@ function App() {
         )}
 
         {view === 'event' && currentEvent && (
-          <EventView
-            event={currentEvent}
-            onBack={handleBackToHome}
-          />
+          <EventView event={currentEvent} onBack={handleBackToHome} />
         )}
       </main>
     </div>
