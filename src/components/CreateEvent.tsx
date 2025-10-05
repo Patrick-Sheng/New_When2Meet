@@ -1,14 +1,14 @@
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import type { Event, TimeSlot } from '../types';
-import { mockEvents } from '../mockData';
+import { mockEvents } from '../App';
 
-type CreateEventProps = {
+interface CreateEventProps {
   onBack: () => void;
   onEventCreated: (event: Event) => void;
   setEvents: (events: Event[]) => void;
-};
+}
 
-export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
+function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
@@ -17,35 +17,31 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartDate, setDragStartDate] = useState<string | null>(null);
   const [dragMode, setDragMode] = useState<'select' | 'deselect' | null>(null);
-  const draggedDatesRef = useRef<Set<string>>(new Set());
+  const draggedDatesRef = useRef(new Set<string>());
 
-  // Generate calendar months (3 months from today)
   const generateCalendarMonths = () => {
     const today = new Date();
-    const months: { monthKey: string; monthName: string; dates: (Date | null)[] }[] = [];
+    const months = [];
 
     for (let monthOffset = 0; monthOffset < 3; monthOffset++) {
       const currentMonth = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth();
 
-      // Get first day of month and last day of month
       const firstDay = new Date(year, month, 1);
       const lastDay = new Date(year, month + 1, 0);
       const daysInMonth = lastDay.getDate();
-      const startDayOfWeek = firstDay.getDay(); // 0 = Sunday, 6 = Saturday
+      const startDayOfWeek = firstDay.getDay();
 
       const monthKey = `${year}-${month}`;
       const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
       const dates: (Date | null)[] = [];
 
-      // Add empty cells for days before month starts
       for (let i = 0; i < startDayOfWeek; i++) {
         dates.push(null);
       }
 
-      // Add all days in the month
       for (let day = 1; day <= daysInMonth; day++) {
         dates.push(new Date(year, month, day));
       }
@@ -58,7 +54,7 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
 
   const calendarMonths = generateCalendarMonths();
 
-  const formatDateString = (date: Date): string => {
+  const formatDateString = (date: Date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -70,13 +66,10 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
     setDragStartDate(dateStr);
     draggedDatesRef.current = new Set([dateStr]);
 
-    // Determine the mode based on current state of the first clicked date
     if (selectedDates.includes(dateStr)) {
-      // First date is selected, so we're deselecting
       setDragMode('deselect');
       setSelectedDates(prev => prev.filter(d => d !== dateStr));
     } else {
-      // First date is not selected, so we're selecting
       setDragMode('select');
       setSelectedDates(prev => [...prev, dateStr]);
     }
@@ -84,14 +77,11 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
 
   const handleMouseEnter = (dateStr: string) => {
     if (!isDragging || !dragMode) return;
-
-    // Avoid re-processing the same date
     if (draggedDatesRef.current.has(dateStr)) return;
 
     draggedDatesRef.current.add(dateStr);
 
     if (dragMode === 'select') {
-      // Add the date if not already selected
       setSelectedDates(prev => {
         if (!prev.includes(dateStr)) {
           return [...prev, dateStr];
@@ -99,7 +89,6 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
         return prev;
       });
     } else {
-      // Remove the date if selected
       setSelectedDates(prev => prev.filter(d => d !== dateStr));
     }
   };
@@ -141,21 +130,17 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
   };
 
   return (
-    <div className="max-w-5xl" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+    <div className="create-event-container" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
       <button onClick={onBack} className="btn-back mb-6">
         ← Back to Home
       </button>
 
       <div className="card-lg">
-        <h2 className="mb-8" style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--gray-800)' }}>
-          Create New Event
-        </h2>
+        <h2 className="create-event-title">Create New Event</h2>
 
         <div className="space-y-6">
           <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
-              Event Title *
-            </label>
+            <label className="form-label">Event Title *</label>
             <input
               type="text"
               value={title}
@@ -166,9 +151,7 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
-              Description
-            </label>
+            <label className="form-label">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -178,7 +161,7 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.75rem' }}>
+            <label className="form-label form-label-spaced">
               Select Dates * (Click and drag to select multiple)
             </label>
 
@@ -188,12 +171,10 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
                   <h3 className="calendar-month-title">{monthName}</h3>
 
                   <div className="calendar-grid">
-                    {/* Weekday headers */}
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                       <div key={day} className="calendar-weekday">{day}</div>
                     ))}
 
-                    {/* Date cells (including empty cells at start) */}
                     {dates.map((date, index) => {
                       if (date === null) {
                         return <div key={`empty-${index}`} className="calendar-day-empty"></div>;
@@ -212,11 +193,6 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
                           className={`calendar-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}`}
                           onMouseDown={() => !isPast && handleMouseDown(dateStr)}
                           onMouseEnter={() => !isPast && handleMouseEnter(dateStr)}
-                          style={{
-                            userSelect: 'none',
-                            cursor: isPast ? 'not-allowed' : 'pointer',
-                            opacity: isPast ? 0.4 : 1
-                          }}
                         >
                           {date.getDate()}
                         </div>
@@ -228,18 +204,15 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
             </div>
 
             {selectedDates.length > 0 && (
-              <div style={{ marginTop: '1rem' }}>
-                <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
+              <div className="selected-dates-container">
+                <p className="selected-dates-label">
                   Selected Dates ({selectedDates.length}):
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {selectedDates.sort().map(date => (
                     <span key={date} className="tag">
                       {new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      <button
-                        onClick={() => removeDate(date)}
-                        className="tag-remove"
-                      >
+                      <button onClick={() => removeDate(date)} className="tag-remove">
                         ×
                       </button>
                     </span>
@@ -251,9 +224,7 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
 
           <div className="grid-cols-2 gap-4">
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
-                Start Time
-              </label>
+              <label className="form-label">Start Time</label>
               <select
                 value={startHour}
                 onChange={(e) => setStartHour(Number(e.target.value))}
@@ -268,9 +239,7 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.5rem' }}>
-                End Time
-              </label>
+              <label className="form-label">End Time</label>
               <select
                 value={endHour}
                 onChange={(e) => setEndHour(Number(e.target.value))}
@@ -285,11 +254,7 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
             </div>
           </div>
 
-          <button
-            onClick={handleCreateEvent}
-            className="btn btn-primary w-full"
-            style={{ padding: '1rem 1.5rem', fontSize: '1rem' }}
-          >
+          <button onClick={handleCreateEvent} className="btn btn-primary w-full btn-large-text">
             Create Event
           </button>
         </div>
@@ -297,3 +262,5 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
     </div>
   );
 }
+
+export default CreateEvent;

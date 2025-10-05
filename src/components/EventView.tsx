@@ -1,19 +1,18 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import type { Event, Availability } from '../types';
-import { mockAvailabilities } from '../mockData';
+import { mockAvailabilities } from '../App';
 
-type EventViewProps = {
+interface EventViewProps {
   event: Event;
   onBack: () => void;
-};
+}
 
-export function EventView({ event, onBack }: EventViewProps) {
+function EventView({ event, onBack }: EventViewProps) {
   const [userName, setUserName] = useState('');
-  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
+  const [selectedSlots, setSelectedSlots] = useState(new Set<string>());
   const [availabilities, setAvailabilities] = useState<Availability[]>(mockAvailabilities);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Get unique users
   const users = Array.from(new Set(availabilities.map(a => a.userName)));
 
   const toggleSlot = (slotId: string) => {
@@ -34,7 +33,6 @@ export function EventView({ event, onBack }: EventViewProps) {
       return;
     }
 
-    // Load existing availability for this user
     const userAvail = availabilities
       .filter(a => a.userName === userName)
       .map(a => a.timeSlotId);
@@ -43,10 +41,8 @@ export function EventView({ event, onBack }: EventViewProps) {
   };
 
   const handleSave = () => {
-    // Remove old availabilities for this user
     const filtered = mockAvailabilities.filter(a => a.userName !== userName);
 
-    // Add new availabilities
     selectedSlots.forEach(slotId => {
       filtered.push({ userName, timeSlotId: slotId });
     });
@@ -74,26 +70,19 @@ export function EventView({ event, onBack }: EventViewProps) {
   const shareableLink = `${window.location.origin}?event=${event.id}`;
 
   return (
-    <div className="max-w-7xl">
+    <div className="event-view-container">
       <button onClick={onBack} className="btn-back mb-6">
         ← Back to Home
       </button>
 
-      {/* Header */}
       <div className="card mb-6">
-        <h2 className="mb-2" style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--gray-900)' }}>
-          {event.title}
-        </h2>
+        <h2 className="event-view-title">{event.title}</h2>
         {event.description && (
-          <p className="mb-4" style={{ color: 'var(--gray-600)', fontSize: '1rem' }}>
-            {event.description}
-          </p>
+          <p className="event-view-description">{event.description}</p>
         )}
 
         <div className="share-box">
-          <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--gray-700)', marginBottom: '0.75rem' }}>
-            Share this event:
-          </p>
+          <p className="share-box-label">Share this event:</p>
           <div className="share-input-group">
             <input
               type="text"
@@ -111,71 +100,35 @@ export function EventView({ event, onBack }: EventViewProps) {
         </div>
       </div>
 
-      {/* User Input Section */}
       <div className="card mb-6">
-        <label style={{
-          display: 'block',
-          fontSize: '0.875rem',
-          fontWeight: '600',
-          color: 'var(--gray-700)',
-          marginBottom: '0.5rem'
-        }}>
-          Your Name
-        </label>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+        <label className="form-label">Your Name</label>
+        <div className="user-input-group">
           <input
             type="text"
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
             placeholder="Enter your name"
             disabled={isEditing}
-            className="input"
-            style={{
-              flex: 1,
-              backgroundColor: isEditing ? 'var(--gray-100)' : 'white'
-            }}
+            className={`input user-input-flex ${isEditing ? 'input-disabled' : ''}`}
           />
           {!isEditing ? (
-            <button
-              onClick={handleStartEditing}
-              className="btn btn-primary"
-              style={{ whiteSpace: 'nowrap' }}
-            >
+            <button onClick={handleStartEditing} className="btn btn-primary btn-nowrap">
               Edit Availability
             </button>
           ) : (
             <>
-              <button
-                onClick={handleSave}
-                className="btn"
-                style={{
-                  backgroundColor: 'var(--green-500)',
-                  color: 'white'
-                }}
-              >
-                Save
-              </button>
-              <button
-                onClick={handleCancel}
-                className="btn"
-                style={{
-                  backgroundColor: 'var(--gray-600)',
-                  color: 'white'
-                }}
-              >
-                Cancel
-              </button>
+              <button onClick={handleSave} className="btn btn-save">Save</button>
+              <button onClick={handleCancel} className="btn btn-cancel">Cancel</button>
             </>
           )}
         </div>
       </div>
 
-      {/* Grid View */}
-      <div className="card" style={{ overflowX: 'auto' }}>
+      <div className="card card-overflow">
         <table className="availability-table">
           <thead>
             <tr>
-              <th className="availability-table-header" style={{ minWidth: '180px' }}>
+              <th className="availability-table-header availability-table-header-timeslot">
                 Time Slot
               </th>
               {users.map(user => (
@@ -184,7 +137,7 @@ export function EventView({ event, onBack }: EventViewProps) {
                 </th>
               ))}
               {isEditing && userName && !users.includes(userName) && (
-                <th className="availability-table-header availability-table-user" style={{ color: 'var(--primary-blue)' }}>
+                <th className="availability-table-header availability-table-user availability-table-user-current">
                   {userName} (You)
                 </th>
               )}
@@ -198,22 +151,17 @@ export function EventView({ event, onBack }: EventViewProps) {
               return (
                 <tr key={slot.id}>
                   <td className="availability-table-timeslot">
-                    <div style={{ fontWeight: '600', color: 'var(--gray-900)' }}>
+                    <div className="timeslot-date">
                       {new Date(slot.date).toLocaleDateString('en-US', {
                         weekday: 'short',
                         month: 'short',
                         day: 'numeric'
                       })}
                     </div>
-                    <div style={{ color: 'var(--gray-600)', fontSize: '0.75rem' }}>
+                    <div className="timeslot-time">
                       {slot.startHour.toString().padStart(2, '0')}:00 - {slot.endHour.toString().padStart(2, '0')}:00
                     </div>
-                    <div style={{
-                      marginTop: '0.25rem',
-                      fontSize: '0.75rem',
-                      color: 'var(--primary-purple)',
-                      fontWeight: '600'
-                    }}>
+                    <div className="timeslot-count">
                       {count} {count === 1 ? 'person' : 'people'}
                     </div>
                   </td>
@@ -235,13 +183,7 @@ export function EventView({ event, onBack }: EventViewProps) {
                     <td className="availability-table-cell">
                       <div
                         onClick={() => toggleSlot(slot.id)}
-                        className="availability-cell availability-cell-editable"
-                        style={{
-                          backgroundColor: selectedSlots.has(slot.id)
-                            ? 'var(--green-500)'
-                            : 'var(--gray-100)',
-                          borderColor: selectedSlots.has(slot.id) ? '#16a34a' : 'var(--gray-300)'
-                        }}
+                        className={`availability-cell availability-cell-editable ${selectedSlots.has(slot.id) ? 'availability-cell-selected' : ''}`}
                       >
                         {selectedSlots.has(slot.id) ? '✓' : ''}
                       </div>
@@ -256,3 +198,5 @@ export function EventView({ event, onBack }: EventViewProps) {
     </div>
   );
 }
+
+export default EventView;
