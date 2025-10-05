@@ -34,7 +34,7 @@ function App() {
     <div className="app-container">
       <header className="app-header">
         <div className="app-header-content">
-          <h1>When2Meet Clone</h1>
+          <h1>ComIt</h1>
         </div>
       </header>
 

@@ -23,7 +23,7 @@ function HomeView({ events, onCreateClick, onEventSelect }: HomeViewProps) {
     <div className="home-view">
       <div className="home-header">
         <h2 className="gradient-text home-title">
-          Welcome to When2Meet
+          Welcome to ComIt
         </h2>
         <p className="home-subtitle">
           Find the perfect time for your group to meet
