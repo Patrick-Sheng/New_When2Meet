@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Event, Availability } from '../types';
 import { availabilityApi } from '../supabaseClient';
+import { supabase } from '../supabaseClient';
 
 interface EventViewProps {
   event: Event;
@@ -17,31 +18,104 @@ function EventView({ event, onBack }: EventViewProps) {
   const [isSaving, setIsSaving] = useState(false);
   const draggedCellsRef = useRef(new Set<string>());
 
-  // Load availability on mount
+  // Load availability and time slots on mount
   useEffect(() => {
-    loadAvailability();
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        await loadTimeSlots();
+        await loadAvailability();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
   }, [event.id]);
+
+  const [dbTimeSlots, setDbTimeSlots] = useState<Set<string>>(new Set());
+  const [dates, setDates] = useState<string[]>([]);
+
+  const loadTimeSlots = async () => {
+    try {
+      const { data: timeSlots, error } = await supabase
+        .from('time_slots')
+        .select('*')
+        .eq('event_id', event.id);
+
+      if (error) throw error;
+
+      // Create a set of valid cell IDs from database time slots
+      const validCells = new Set<string>();
+      const datesSet = new Set<string>();
+
+      timeSlots?.forEach((slot) => {
+        const startDate = new Date(slot.start_time);
+
+        // Format date in local timezone
+        const year = startDate.getFullYear();
+        const month = String(startDate.getMonth() + 1).padStart(2, '0');
+        const day = String(startDate.getDate()).padStart(2, '0');
+        const date = `${year}-${month}-${day}`;
+
+        const hour = startDate.getHours();
+        const minute = startDate.getMinutes();
+        const cellId = `${date}-${hour}-${minute}`;
+        validCells.add(cellId);
+        datesSet.add(date);
+      });
+
+      // Set dates from actual database slots
+      const sortedDates = Array.from(datesSet).sort();
+
+      setDates(sortedDates);
+      setDbTimeSlots(validCells);
+    } catch (error) {
+      console.error('Error loading time slots:', error);
+    }
+  };
 
   const loadAvailability = async () => {
     try {
-      setIsLoading(true);
       const data = await availabilityApi.getEventAvailability(event.id);
 
-      const loadedAvailability: Availability[] = data.map(item => ({
-        userName: item.user_name,
-        timeSlotId: item.time_slot_id
-      }));
+      // Map availability with time slot info to get cell IDs
+      const loadedAvailability: Availability[] = data.map(item => {
+        // Get the time slot details
+        const timeSlot = item.time_slots;
+        if (!timeSlot) {
+          console.warn('No time slot data for availability:', item);
+          return {
+            userName: item.user_name,
+            timeSlotId: item.time_slot_id
+          };
+        }
+
+        // Convert time slot to cell ID format (local timezone)
+        const startDate = new Date(timeSlot.start_time);
+
+        const year = startDate.getFullYear();
+        const month = String(startDate.getMonth() + 1).padStart(2, '0');
+        const day = String(startDate.getDate()).padStart(2, '0');
+        const date = `${year}-${month}-${day}`;
+
+        const hour = startDate.getHours();
+        const minute = startDate.getMinutes();
+        const cellId = `${date}-${hour}-${minute}`;
+
+        return {
+          userName: item.user_name,
+          timeSlotId: cellId // Use the cell ID for display
+        };
+      });
 
       setAvailabilities(loadedAvailability);
     } catch (error) {
       console.error('Error loading availability:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  // Get unique dates from time slots
-  const dates = Array.from(new Set(event.timeSlots.map(s => s.date))).sort();
+  // Get unique dates from time slots (will be set from database)
+  // const dates = Array.from(new Set(event.timeSlots.map(s => s.date))).sort();
 
   // Get hour range from all time slots and create 15-min intervals
   const allHours = event.timeSlots.flatMap(s => [s.startHour, s.endHour]);
@@ -60,22 +134,19 @@ function EventView({ event, onBack }: EventViewProps) {
 
   const getCellId = (date: string, hour: number, minute: number) => `${date}-${hour}-${minute}`;
 
-  // Check if a cell is within a valid time slot
+  // Check if a cell is within a valid time slot (based on actual database records)
   const isValidCell = (date: string, hour: number, minute: number) => {
-    return event.timeSlots.some(slot => {
-      if (slot.date !== date) return false;
-      const cellTime = hour + minute / 60;
-      return cellTime >= slot.startHour && cellTime < slot.endHour;
-    });
+    const cellId = getCellId(date, hour, minute);
+    return dbTimeSlots.has(cellId);
   };
 
   // Get users available for a specific cell
   const getUsersForCell = (date: string, hour: number, minute: number) => {
+    const cellId = getCellId(date, hour, minute);
+
     return availabilities.filter(a => {
-      const slot = event.timeSlots.find(s => s.id === a.timeSlotId);
-      if (!slot || slot.date !== date) return false;
-      const cellTime = hour + minute / 60;
-      return cellTime >= slot.startHour && cellTime < slot.endHour;
+      // Check if this availability's timeSlotId matches our cell
+      return a.timeSlotId === cellId;
     }).map(a => a.userName);
   };
 
@@ -138,30 +209,16 @@ function EventView({ event, onBack }: EventViewProps) {
     setIsSaving(true);
 
     try {
-      // Get unique time slot IDs from selected cells
-      const timeSlotIds = new Set<string>();
+      // Convert selected cells to array of cell IDs
+      const cellIds = Array.from(selectedCells);
 
-      selectedCells.forEach(cellId => {
-        const parts = cellId.split('-');
-        const date = parts.slice(0, 3).join('-');
-        const hour = parseInt(parts[3]);
-        const minute = parseInt(parts[4]);
-        const cellTime = hour + minute / 60;
+      console.log('Saving availability for cells:', cellIds);
 
-        const slot = event.timeSlots.find(s =>
-          s.date === date && cellTime >= s.startHour && cellTime < s.endHour
-        );
-
-        if (slot) {
-          timeSlotIds.add(slot.id);
-        }
-      });
-
-      // Save to Supabase
+      // The saveAvailability function will map these to database UUIDs
       await availabilityApi.saveAvailability(
         event.id,
         userName,
-        Array.from(timeSlotIds)
+        cellIds
       );
 
       // Reload availability

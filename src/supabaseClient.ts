@@ -5,12 +5,6 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1N
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Check which schema you're using:
-// Schema 1: events(id, name, created_at) + availability(slot timestamp)
-// Schema 2: events(id, title, description, created_at) + time_slots(start_time, end_time) + availabilities(time_slot_id)
-
-// This is for SCHEMA 2 (the one you ran second with title/description)
-
 export type DbEvent = {
   id: string;
   title: string;
@@ -42,7 +36,7 @@ const createTimestamp = (dateStr: string, hour: number): string => {
 };
 
 export const eventApi = {
-  // Create a new event with time slots
+  // Create a new event with time slots (15-minute granularity)
   async createEvent(
     title: string,
     description: string,
@@ -50,7 +44,7 @@ export const eventApi = {
   ) {
     console.log('Creating event with:', { title, timeSlots });
 
-    // Insert event - only 'title' (no description column in your schema)
+    // Insert event
     const { data: event, error: eventError } = await supabase
       .from('events')
       .insert({
@@ -66,14 +60,34 @@ export const eventApi = {
 
     console.log('Event created:', event);
 
-    // Insert time slots with timestamps
-    const timeSlotsData = timeSlots.map(slot => ({
-      event_id: event.id,
-      start_time: createTimestamp(slot.date, slot.startHour),
-      end_time: createTimestamp(slot.date, slot.endHour)
-    }));
+    // Create 15-minute time slots for each date range
+    const timeSlotsData: Array<{ event_id: string; start_time: string; end_time: string }> = [];
 
-    console.log('Inserting time slots:', timeSlotsData);
+    for (const slot of timeSlots) {
+      // Parse date in local timezone
+      const [year, month, day] = slot.date.split('-').map(Number);
+
+      console.log(`Creating slots for ${slot.date}, hours ${slot.startHour}-${slot.endHour}`);
+
+      // Create a time slot for each 15-minute interval
+      for (let h = slot.startHour; h < slot.endHour; h++) {
+        for (let m = 0; m < 60; m += 15) {
+          // Create date in local timezone
+          const startDate = new Date(year, month - 1, day, h, m, 0, 0);
+          const endDate = new Date(year, month - 1, day, h, m + 15, 0, 0);
+
+          timeSlotsData.push({
+            event_id: event.id,
+            start_time: startDate.toISOString(),
+            end_time: endDate.toISOString()
+          });
+        }
+      }
+    }
+
+    console.log(`Creating ${timeSlotsData.length} 15-minute time slots`);
+    console.log('First 3 time slots:', timeSlotsData.slice(0, 3));
+    console.log('Last 3 time slots:', timeSlotsData.slice(-3));
 
     const { data: slots, error: slotsError } = await supabase
       .from('time_slots')
@@ -85,7 +99,7 @@ export const eventApi = {
       throw slotsError;
     }
 
-    console.log('Time slots created:', slots);
+    console.log('Time slots created:', slots?.length);
 
     return { event, timeSlots: slots };
   },
@@ -129,7 +143,10 @@ export const eventApi = {
 
 export const availabilityApi = {
   // Save user availability
-  async saveAvailability(eventId: string, userName: string, timeSlotIds: string[]) {
+  // cellIds are in format: "YYYY-MM-DD-HH-MM" representing 15-min time slots
+  async saveAvailability(eventId: string, userName: string, cellIds: string[]) {
+    console.log('saveAvailability called with:', { eventId, userName, cellIds });
+
     // First, delete existing availability for this user and event
     const { error: deleteError } = await supabase
       .from('availabilities')
@@ -137,21 +154,77 @@ export const availabilityApi = {
       .eq('event_id', eventId)
       .eq('user_name', userName);
 
-    if (deleteError) throw deleteError;
+    if (deleteError) {
+      console.error('Error deleting old availability:', deleteError);
+      throw deleteError;
+    }
 
-    // Insert new availability
-    const availabilityData = timeSlotIds.map(timeSlotId => ({
-      event_id: eventId,
-      time_slot_id: timeSlotId,
-      user_name: userName
-    }));
+    // Get all time slots for this event
+    const { data: timeSlots, error: slotsError } = await supabase
+      .from('time_slots')
+      .select('*')
+      .eq('event_id', eventId);
+
+    if (slotsError) {
+      console.error('Error fetching time slots:', slotsError);
+      throw slotsError;
+    }
+
+    console.log('Found time slots:', timeSlots?.length);
+
+    // Create a map of cell IDs to time slot database IDs
+    const cellToSlotMap = new Map<string, string>();
+
+    timeSlots?.forEach(slot => {
+      const startDate = new Date(slot.start_time);
+
+      // Format date in local timezone
+      const year = startDate.getFullYear();
+      const month = String(startDate.getMonth() + 1).padStart(2, '0');
+      const day = String(startDate.getDate()).padStart(2, '0');
+      const date = `${year}-${month}-${day}`;
+
+      const hour = startDate.getHours();
+      const minute = startDate.getMinutes();
+      const cellId = `${date}-${hour}-${minute}`;
+      cellToSlotMap.set(cellId, slot.id);
+    });
+
+    console.log('Cell to slot map:', Object.fromEntries(cellToSlotMap));
+
+    // Map cell IDs to database time slot IDs
+    const availabilityData = cellIds
+      .map(cellId => {
+        const slotId = cellToSlotMap.get(cellId);
+        if (!slotId) {
+          console.warn(`No time slot found for cell ${cellId}`);
+          return null;
+        }
+        return {
+          event_id: eventId,
+          time_slot_id: slotId,
+          user_name: userName
+        };
+      })
+      .filter((item): item is { event_id: string; time_slot_id: string; user_name: string } => item !== null);
+
+    console.log('Availability data to insert:', availabilityData);
+
+    if (availabilityData.length === 0) {
+      throw new Error('No valid time slots found for selected cells');
+    }
 
     const { data, error } = await supabase
       .from('availabilities')
       .insert(availabilityData)
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error inserting availability:', error);
+      throw error;
+    }
+
+    console.log('Successfully saved availability:', data);
     return data;
   },
 
@@ -159,7 +232,10 @@ export const availabilityApi = {
   async getEventAvailability(eventId: string) {
     const { data, error } = await supabase
       .from('availabilities')
-      .select('*')
+      .select(`
+        *,
+        time_slots (*)
+      `)
       .eq('event_id', eventId);
 
     if (error) throw error;
