@@ -32,7 +32,7 @@ function EventView({ event, onBack }: EventViewProps) {
     loadData();
   }, [event.id]);
 
-  const [dbTimeSlots, setDbTimeSlots] = useState<Set<string>>(new Set());
+  const [validCells, setValidCells] = useState<Set<string>>(new Set());
   const [dates, setDates] = useState<string[]>([]);
 
   const loadTimeSlots = async () => {
@@ -44,12 +44,13 @@ function EventView({ event, onBack }: EventViewProps) {
 
       if (error) throw error;
 
-      // Create a set of valid cell IDs from database time slots
-      const validCells = new Set<string>();
+      // Generate 15-min cells from time slot ranges
+      const cellsSet = new Set<string>();
       const datesSet = new Set<string>();
 
       timeSlots?.forEach((slot) => {
         const startDate = new Date(slot.start_time);
+        const endDate = new Date(slot.end_time);
 
         // Format date in local timezone
         const year = startDate.getFullYear();
@@ -57,18 +58,25 @@ function EventView({ event, onBack }: EventViewProps) {
         const day = String(startDate.getDate()).padStart(2, '0');
         const date = `${year}-${month}-${day}`;
 
-        const hour = startDate.getHours();
-        const minute = startDate.getMinutes();
-        const cellId = `${date}-${hour}-${minute}`;
-        validCells.add(cellId);
         datesSet.add(date);
+
+        // Generate 15-minute cells for this time range
+        const current = new Date(startDate);
+        while (current < endDate) {
+          const hour = current.getHours();
+          const minute = current.getMinutes();
+          const cellId = `${date}-${hour}-${minute}`;
+          cellsSet.add(cellId);
+
+          // Move to next 15-minute interval
+          current.setMinutes(current.getMinutes() + 15);
+        }
       });
 
-      // Set dates from actual database slots
       const sortedDates = Array.from(datesSet).sort();
 
       setDates(sortedDates);
-      setDbTimeSlots(validCells);
+      setValidCells(cellsSet);
     } catch (error) {
       console.error('Error loading time slots:', error);
     }
@@ -78,34 +86,19 @@ function EventView({ event, onBack }: EventViewProps) {
     try {
       const data = await availabilityApi.getEventAvailability(event.id);
 
-      // Map availability with time slot info to get cell IDs
-      const loadedAvailability: Availability[] = data.map(item => {
-        // Get the time slot details
-        const timeSlot = item.time_slots;
-        if (!timeSlot) {
-          console.warn('No time slot data for availability:', item);
-          return {
+      // Map availability - each record now has selected_cells as JSON array
+      const loadedAvailability: Availability[] = [];
+
+      data.forEach(item => {
+        // selected_cells is an array of cell IDs
+        const selectedCells = item.selected_cells || [];
+
+        selectedCells.forEach((cellId: string) => {
+          loadedAvailability.push({
             userName: item.user_name,
-            timeSlotId: item.time_slot_id
-          };
-        }
-
-        // Convert time slot to cell ID format (local timezone)
-        const startDate = new Date(timeSlot.start_time);
-
-        const year = startDate.getFullYear();
-        const month = String(startDate.getMonth() + 1).padStart(2, '0');
-        const day = String(startDate.getDate()).padStart(2, '0');
-        const date = `${year}-${month}-${day}`;
-
-        const hour = startDate.getHours();
-        const minute = startDate.getMinutes();
-        const cellId = `${date}-${hour}-${minute}`;
-
-        return {
-          userName: item.user_name,
-          timeSlotId: cellId // Use the cell ID for display
-        };
+            timeSlotId: cellId
+          });
+        });
       });
 
       setAvailabilities(loadedAvailability);
@@ -114,10 +107,7 @@ function EventView({ event, onBack }: EventViewProps) {
     }
   };
 
-  // Get unique dates from time slots (will be set from database)
-  // const dates = Array.from(new Set(event.timeSlots.map(s => s.date))).sort();
-
-  // Get hour range from all time slots and create 15-min intervals
+  // Get unique dates from time slots
   const allHours = event.timeSlots.flatMap(s => [s.startHour, s.endHour]);
   const minHour = Math.min(...allHours);
   const maxHour = Math.max(...allHours);
@@ -134,20 +124,16 @@ function EventView({ event, onBack }: EventViewProps) {
 
   const getCellId = (date: string, hour: number, minute: number) => `${date}-${hour}-${minute}`;
 
-  // Check if a cell is within a valid time slot (based on actual database records)
+  // Check if a cell is valid (exists in generated cells from time slots)
   const isValidCell = (date: string, hour: number, minute: number) => {
     const cellId = getCellId(date, hour, minute);
-    return dbTimeSlots.has(cellId);
+    return validCells.has(cellId);
   };
 
   // Get users available for a specific cell
   const getUsersForCell = (date: string, hour: number, minute: number) => {
     const cellId = getCellId(date, hour, minute);
-
-    return availabilities.filter(a => {
-      // Check if this availability's timeSlotId matches our cell
-      return a.timeSlotId === cellId;
-    }).map(a => a.userName);
+    return availabilities.filter(a => a.timeSlotId === cellId).map(a => a.userName);
   };
 
   const handleMouseDown = (date: string, hour: number, minute: number) => {
@@ -209,19 +195,16 @@ function EventView({ event, onBack }: EventViewProps) {
     setIsSaving(true);
 
     try {
-      // Convert selected cells to array of cell IDs
       const cellIds = Array.from(selectedCells);
 
       console.log('Saving availability for cells:', cellIds);
 
-      // The saveAvailability function will map these to database UUIDs
       await availabilityApi.saveAvailability(
         event.id,
         userName,
         cellIds
       );
 
-      // Reload availability
       await loadAvailability();
 
       setSelectedCells(new Set());
