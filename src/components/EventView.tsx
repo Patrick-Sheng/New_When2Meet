@@ -16,6 +16,7 @@ function EventView({ event, onBack }: EventViewProps) {
   const [dragMode, setDragMode] = useState<'select' | 'deselect' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [hoveredCell, setHoveredCell] = useState<string | null>(null);
   const draggedCellsRef = useRef(new Set<string>());
 
   // Load availability and time slots on mount
@@ -180,6 +181,20 @@ function EventView({ event, onBack }: EventViewProps) {
     }
   };
 
+  const handleCellHover = (date: string, hour: number, minute: number) => {
+    const cellId = getCellId(date, hour, minute);
+    const usersInCell = getUsersForCell(date, hour, minute);
+
+    // Only show tooltip if there are users or if cell is selected by current user
+    if (usersInCell.length > 0 || selectedCells.has(cellId)) {
+      setHoveredCell(cellId);
+    }
+  };
+
+  const handleCellLeave = () => {
+    setHoveredCell(null);
+  };
+
   const handleMouseUp = () => {
     setIsDragging(false);
     setDragMode(null);
@@ -293,6 +308,21 @@ function EventView({ event, onBack }: EventViewProps) {
         </div>
       </div>
 
+      {users.length > 0 && (
+        <div className="card mb-6">
+          <h3 style={{ fontWeight: '600', marginBottom: '1rem' }}>
+            Participants ({users.length})
+          </h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {users.map(user => (
+              <span key={user} className="tag">
+                {user}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="calendar-week-container">
         <div className="calendar-week-grid" style={{
           gridTemplateColumns: `80px repeat(${dates.length}, 1fr)`
@@ -318,12 +348,20 @@ function EventView({ event, onBack }: EventViewProps) {
                 const usersInCell = getUsersForCell(date, hour, minute);
                 const intensity = Math.min(usersInCell.length / (users.length || 1), 1);
                 const isLocked = !userName || isSaving;
+                const isHovered = hoveredCell === cellId;
+                const showTooltip = isHovered && (usersInCell.length > 0 || isSelected);
 
                 return (
                   <div
                     key={cellId}
                     onMouseDown={() => !isLocked && handleMouseDown(date, hour, minute)}
-                    onMouseEnter={() => !isLocked && handleMouseEnter(date, hour, minute)}
+                    onMouseEnter={() => {
+                      if (!isLocked) {
+                        handleMouseEnter(date, hour, minute);
+                      }
+                      handleCellHover(date, hour, minute);
+                    }}
+                    onMouseLeave={handleCellLeave}
                     className={`calendar-cell ${isSelected ? 'calendar-cell-selected' : ''} ${!isValid || isLocked ? 'calendar-cell-unavailable' : ''}`}
                     style={{
                       backgroundColor: !isSelected && usersInCell.length > 0
@@ -336,6 +374,30 @@ function EventView({ event, onBack }: EventViewProps) {
                     {usersInCell.length > 0 && !isSelected && (
                       <div className="calendar-cell-availability">
                         {usersInCell.length}
+                      </div>
+                    )}
+
+                    {/* Tooltip */}
+                    {showTooltip && (
+                      <div className={`calendar-cell-tooltip ${showTooltip ? 'visible' : ''}`}>
+                        {isSelected && usersInCell.length === 0 ? (
+                          <div>You (not saved)</div>
+                        ) : (
+                          <div className="tooltip-users">
+                            {isSelected && (
+                              <div className="tooltip-user">
+                                <div className="tooltip-user-dot"></div>
+                                <span>You (not saved)</span>
+                              </div>
+                            )}
+                            {usersInCell.map(user => (
+                              <div key={user} className="tooltip-user">
+                                <div className="tooltip-user-dot"></div>
+                                <span>{user}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -358,22 +420,7 @@ function EventView({ event, onBack }: EventViewProps) {
 
       {userName && !isSaving && (
         <div className="calendar-instructions">
-          💡 Click and drag to select your available times
-        </div>
-      )}
-
-      {users.length > 0 && (
-        <div className="card" style={{ marginTop: '1.5rem' }}>
-          <h3 style={{ fontWeight: '600', marginBottom: '1rem' }}>
-            Participants ({users.length})
-          </h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {users.map(user => (
-              <span key={user} className="tag">
-                {user}
-              </span>
-            ))}
-          </div>
+          💡 Click and drag to select your available times. Hover over cells to see who's available.
         </div>
       )}
     </div>

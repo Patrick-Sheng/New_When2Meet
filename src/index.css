@@ -822,3 +822,68 @@ body {
     min-height: 40px;
   }
 }
+
+/* Tooltip Styles - Add to src/index.css */
+
+/* Tooltip container */
+.calendar-cell-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background-color: var(--gray-900);
+  color: white;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-cell-tooltip.visible {
+  opacity: 1;
+}
+
+/* Tooltip arrow */
+.calendar-cell-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid var(--gray-900);
+}
+
+/* Tooltip user list */
+.tooltip-users {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tooltip-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tooltip-user-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--green-500);
+}
+
+/* Calendar cell needs relative positioning for tooltip */
+.calendar-cell {
+  position: relative;
+}
