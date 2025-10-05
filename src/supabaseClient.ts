@@ -28,15 +28,8 @@ export type DbAvailability = {
   created_at: string;
 };
 
-// Helper to convert date + hour to ISO timestamp
-const createTimestamp = (dateStr: string, hour: number): string => {
-  const date = new Date(dateStr);
-  date.setHours(hour, 0, 0, 0);
-  return date.toISOString();
-};
-
 export const eventApi = {
-  // Create a new event with time slots (15-minute granularity)
+  // Create a new event with time slots (one per day, not per 15-min interval)
   async createEvent(
     title: string,
     description: string,
@@ -48,7 +41,8 @@ export const eventApi = {
     const { data: event, error: eventError } = await supabase
       .from('events')
       .insert({
-        title: title
+        title: title,
+        description: description
       })
       .select()
       .single();
@@ -60,34 +54,25 @@ export const eventApi = {
 
     console.log('Event created:', event);
 
-    // Create 15-minute time slots for each date range
+    // Create ONE time slot per day (not per 15-min interval)
     const timeSlotsData: Array<{ event_id: string; start_time: string; end_time: string }> = [];
 
     for (const slot of timeSlots) {
       // Parse date in local timezone
       const [year, month, day] = slot.date.split('-').map(Number);
 
-      console.log(`Creating slots for ${slot.date}, hours ${slot.startHour}-${slot.endHour}`);
+      // Create date in local timezone
+      const startDate = new Date(year, month - 1, day, slot.startHour, 0, 0, 0);
+      const endDate = new Date(year, month - 1, day, slot.endHour, 0, 0, 0);
 
-      // Create a time slot for each 15-minute interval
-      for (let h = slot.startHour; h < slot.endHour; h++) {
-        for (let m = 0; m < 60; m += 15) {
-          // Create date in local timezone
-          const startDate = new Date(year, month - 1, day, h, m, 0, 0);
-          const endDate = new Date(year, month - 1, day, h, m + 15, 0, 0);
-
-          timeSlotsData.push({
-            event_id: event.id,
-            start_time: startDate.toISOString(),
-            end_time: endDate.toISOString()
-          });
-        }
-      }
+      timeSlotsData.push({
+        event_id: event.id,
+        start_time: startDate.toISOString(),
+        end_time: endDate.toISOString()
+      });
     }
 
-    console.log(`Creating ${timeSlotsData.length} 15-minute time slots`);
-    console.log('First 3 time slots:', timeSlotsData.slice(0, 3));
-    console.log('Last 3 time slots:', timeSlotsData.slice(-3));
+    console.log(`Creating ${timeSlotsData.length} time slots (one per day)`);
 
     const { data: slots, error: slotsError } = await supabase
       .from('time_slots')
@@ -172,47 +157,16 @@ export const availabilityApi = {
 
     console.log('Found time slots:', timeSlots?.length);
 
-    // Create a map of cell IDs to time slot database IDs
-    const cellToSlotMap = new Map<string, string>();
-
-    timeSlots?.forEach(slot => {
-      const startDate = new Date(slot.start_time);
-
-      // Format date in local timezone
-      const year = startDate.getFullYear();
-      const month = String(startDate.getMonth() + 1).padStart(2, '0');
-      const day = String(startDate.getDate()).padStart(2, '0');
-      const date = `${year}-${month}-${day}`;
-
-      const hour = startDate.getHours();
-      const minute = startDate.getMinutes();
-      const cellId = `${date}-${hour}-${minute}`;
-      cellToSlotMap.set(cellId, slot.id);
-    });
-
-    console.log('Cell to slot map:', Object.fromEntries(cellToSlotMap));
-
-    // Map cell IDs to database time slot IDs
-    const availabilityData = cellIds
-      .map(cellId => {
-        const slotId = cellToSlotMap.get(cellId);
-        if (!slotId) {
-          console.warn(`No time slot found for cell ${cellId}`);
-          return null;
-        }
-        return {
-          event_id: eventId,
-          time_slot_id: slotId,
-          user_name: userName
-        };
-      })
-      .filter((item): item is { event_id: string; time_slot_id: string; user_name: string } => item !== null);
+    // Just store all selected cell IDs as a single JSON array
+    // This way we don't need multiple records per user
+    const availabilityData = {
+      event_id: eventId,
+      time_slot_id: timeSlots?.[0]?.id || '', // Use first slot as reference
+      user_name: userName,
+      selected_cells: cellIds // Store entire array of selected cells
+    };
 
     console.log('Availability data to insert:', availabilityData);
-
-    if (availabilityData.length === 0) {
-      throw new Error('No valid time slots found for selected cells');
-    }
 
     const { data, error } = await supabase
       .from('availabilities')
