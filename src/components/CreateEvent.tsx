@@ -16,6 +16,7 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
   const [endHour, setEndHour] = useState(17);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartDate, setDragStartDate] = useState<string | null>(null);
+  const [dragMode, setDragMode] = useState<'select' | 'deselect' | null>(null);
   const draggedDatesRef = useRef<Set<string>>(new Set());
 
   // Generate calendar months (3 months from today)
@@ -69,37 +70,44 @@ export function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventPr
     setDragStartDate(dateStr);
     draggedDatesRef.current = new Set([dateStr]);
 
+    // Determine the mode based on current state of the first clicked date
     if (selectedDates.includes(dateStr)) {
-      // Remove date if already selected
-      setSelectedDates(selectedDates.filter(d => d !== dateStr));
+      // First date is selected, so we're deselecting
+      setDragMode('deselect');
+      setSelectedDates(prev => prev.filter(d => d !== dateStr));
     } else {
-      // Add date if not selected
-      setSelectedDates([...selectedDates, dateStr]);
+      // First date is not selected, so we're selecting
+      setDragMode('select');
+      setSelectedDates(prev => [...prev, dateStr]);
     }
   };
 
   const handleMouseEnter = (dateStr: string) => {
-    if (!isDragging || !dragStartDate) return;
+    if (!isDragging || !dragMode) return;
 
     // Avoid re-processing the same date
     if (draggedDatesRef.current.has(dateStr)) return;
 
     draggedDatesRef.current.add(dateStr);
 
-    const isRemoving = selectedDates.includes(dragStartDate);
-
-    if (isRemoving) {
-      setSelectedDates(selectedDates.filter(d => d !== dateStr));
+    if (dragMode === 'select') {
+      // Add the date if not already selected
+      setSelectedDates(prev => {
+        if (!prev.includes(dateStr)) {
+          return [...prev, dateStr];
+        }
+        return prev;
+      });
     } else {
-      if (!selectedDates.includes(dateStr)) {
-        setSelectedDates([...selectedDates, dateStr]);
-      }
+      // Remove the date if selected
+      setSelectedDates(prev => prev.filter(d => d !== dateStr));
     }
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
     setDragStartDate(null);
+    setDragMode(null);
     draggedDatesRef.current.clear();
   };
 
