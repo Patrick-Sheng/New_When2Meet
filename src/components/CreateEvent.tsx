@@ -1,14 +1,13 @@
 import React, { useState, useRef } from 'react';
 import type { Event, TimeSlot } from '../types';
-import { mockEvents } from '../App';
+import { eventApi } from '../supabaseClient';
 
 interface CreateEventProps {
   onBack: () => void;
   onEventCreated: (event: Event) => void;
-  setEvents: (events: Event[]) => void;
 }
 
-function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
+function CreateEvent({ onBack, onEventCreated }: CreateEventProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
@@ -17,6 +16,7 @@ function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartDate, setDragStartDate] = useState<string | null>(null);
   const [dragMode, setDragMode] = useState<'select' | 'deselect' | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const draggedDatesRef = useRef(new Set<string>());
 
   const generateCalendarMonths = () => {
@@ -104,29 +104,59 @@ function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
     setSelectedDates(selectedDates.filter(d => d !== date));
   };
 
-  const handleCreateEvent = () => {
+  const handleCreateEvent = async () => {
     if (!title || selectedDates.length === 0) {
       alert('Please enter a title and select at least one date');
       return;
     }
 
-    const timeSlots: TimeSlot[] = selectedDates.map(date => ({
-      id: `${date}-${startHour}-${endHour}`,
-      date,
-      startHour,
-      endHour
-    }));
+    if (startHour >= endHour) {
+      alert('End time must be after start time');
+      return;
+    }
 
-    const newEvent: Event = {
-      id: Math.random().toString(36).substr(2, 9),
-      title,
-      description,
-      timeSlots
-    };
+    setIsCreating(true);
 
-    mockEvents.push(newEvent);
-    setEvents([...mockEvents]);
-    onEventCreated(newEvent);
+    try {
+      // Prepare time slots for database
+      const timeSlotsData = selectedDates.map(date => ({
+        date,
+        startHour: startHour,
+        endHour: endHour
+      }));
+
+      // Create event in Supabase
+      const { event, timeSlots } = await eventApi.createEvent(
+        title,
+        description,
+        timeSlotsData
+      );
+
+      // Convert database timestamps to frontend format
+      const newEvent: Event = {
+        id: event.id,
+        title: event.title,
+        description: event.description || '',
+        timeSlots: timeSlots.map((slot): TimeSlot => {
+          const startDate = new Date(slot.start_time);
+          const endDate = new Date(slot.end_time);
+
+          return {
+            id: slot.id,
+            date: startDate.toISOString().split('T')[0], // YYYY-MM-DD
+            startHour: startDate.getHours(),
+            endHour: endDate.getHours()
+          };
+        })
+      };
+
+      onEventCreated(newEvent);
+    } catch (error) {
+      console.error('Error creating event:', error);
+      alert('Failed to create event. Please try again.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -147,6 +177,7 @@ function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
               onChange={(e) => setTitle(e.target.value)}
               className="input"
               placeholder="Team Meeting"
+              disabled={isCreating}
             />
           </div>
 
@@ -157,6 +188,7 @@ function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
               onChange={(e) => setDescription(e.target.value)}
               className="input textarea"
               placeholder="Optional description..."
+              disabled={isCreating}
             />
           </div>
 
@@ -191,8 +223,9 @@ function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
                         <div
                           key={dateStr}
                           className={`calendar-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}`}
-                          onMouseDown={() => !isPast && handleMouseDown(dateStr)}
-                          onMouseEnter={() => !isPast && handleMouseEnter(dateStr)}
+                          onMouseDown={() => !isPast && !isCreating && handleMouseDown(dateStr)}
+                          onMouseEnter={() => !isPast && !isCreating && handleMouseEnter(dateStr)}
+                          style={{ cursor: isCreating ? 'not-allowed' : undefined }}
                         >
                           {date.getDate()}
                         </div>
@@ -212,7 +245,11 @@ function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
                   {selectedDates.sort().map(date => (
                     <span key={date} className="tag">
                       {new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      <button onClick={() => removeDate(date)} className="tag-remove">
+                      <button
+                        onClick={() => !isCreating && removeDate(date)}
+                        className="tag-remove"
+                        disabled={isCreating}
+                      >
                         ×
                       </button>
                     </span>
@@ -229,6 +266,7 @@ function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
                 value={startHour}
                 onChange={(e) => setStartHour(Number(e.target.value))}
                 className="input select"
+                disabled={isCreating}
               >
                 {Array.from({ length: 24 }, (_, i) => (
                   <option key={i} value={i}>
@@ -244,6 +282,7 @@ function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
                 value={endHour}
                 onChange={(e) => setEndHour(Number(e.target.value))}
                 className="input select"
+                disabled={isCreating}
               >
                 {Array.from({ length: 24 }, (_, i) => (
                   <option key={i} value={i}>
@@ -254,8 +293,13 @@ function CreateEvent({ onBack, onEventCreated, setEvents }: CreateEventProps) {
             </div>
           </div>
 
-          <button onClick={handleCreateEvent} className="btn btn-primary w-full btn-large-text">
-            Create Event
+          <button
+            onClick={handleCreateEvent}
+            className="btn btn-primary w-full btn-large-text"
+            disabled={isCreating}
+            style={{ opacity: isCreating ? 0.6 : 1 }}
+          >
+            {isCreating ? 'Creating Event...' : 'Create Event'}
           </button>
         </div>
       </div>

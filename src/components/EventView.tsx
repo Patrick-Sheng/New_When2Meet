@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Event, Availability } from '../types';
-import { mockAvailabilities } from '../App';
+import { availabilityApi } from '../supabaseClient';
 
 interface EventViewProps {
   event: Event;
@@ -10,10 +10,35 @@ interface EventViewProps {
 function EventView({ event, onBack }: EventViewProps) {
   const [userName, setUserName] = useState('');
   const [selectedCells, setSelectedCells] = useState(new Set<string>());
-  const [availabilities, setAvailabilities] = useState<Availability[]>(mockAvailabilities);
+  const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<'select' | 'deselect' | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const draggedCellsRef = useRef(new Set<string>());
+
+  // Load availability on mount
+  useEffect(() => {
+    loadAvailability();
+  }, [event.id]);
+
+  const loadAvailability = async () => {
+    try {
+      setIsLoading(true);
+      const data = await availabilityApi.getEventAvailability(event.id);
+
+      const loadedAvailability: Availability[] = data.map(item => ({
+        userName: item.user_name,
+        timeSlotId: item.time_slot_id
+      }));
+
+      setAvailabilities(loadedAvailability);
+    } catch (error) {
+      console.error('Error loading availability:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Get unique dates from time slots
   const dates = Array.from(new Set(event.timeSlots.map(s => s.date))).sort();
@@ -104,38 +129,52 @@ function EventView({ event, onBack }: EventViewProps) {
     draggedCellsRef.current.clear();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!userName || selectedCells.size === 0) {
       alert('Please enter your name and select available times');
       return;
     }
 
-    // Remove existing availability for this user
-    const filtered = mockAvailabilities.filter(a => a.userName !== userName);
+    setIsSaving(true);
 
-    // Add new availability based on selected cells
-    selectedCells.forEach(cellId => {
-      const parts = cellId.split('-');
-      const date = parts.slice(0, 3).join('-');
-      const hour = parseInt(parts[3]);
-      const minute = parseInt(parts[4]);
+    try {
+      // Get unique time slot IDs from selected cells
+      const timeSlotIds = new Set<string>();
 
-      // Find matching time slot
-      const cellTime = hour + minute / 60;
-      const slot = event.timeSlots.find(s =>
-        s.date === date && cellTime >= s.startHour && cellTime < s.endHour
+      selectedCells.forEach(cellId => {
+        const parts = cellId.split('-');
+        const date = parts.slice(0, 3).join('-');
+        const hour = parseInt(parts[3]);
+        const minute = parseInt(parts[4]);
+        const cellTime = hour + minute / 60;
+
+        const slot = event.timeSlots.find(s =>
+          s.date === date && cellTime >= s.startHour && cellTime < s.endHour
+        );
+
+        if (slot) {
+          timeSlotIds.add(slot.id);
+        }
+      });
+
+      // Save to Supabase
+      await availabilityApi.saveAvailability(
+        event.id,
+        userName,
+        Array.from(timeSlotIds)
       );
 
-      if (slot && !filtered.some(a => a.userName === userName && a.timeSlotId === slot.id)) {
-        filtered.push({ userName, timeSlotId: slot.id });
-      }
-    });
+      // Reload availability
+      await loadAvailability();
 
-    mockAvailabilities.length = 0;
-    mockAvailabilities.push(...filtered);
-    setAvailabilities([...mockAvailabilities]);
-    setSelectedCells(new Set());
-    alert(`Saved availability for ${userName}!`);
+      setSelectedCells(new Set());
+      alert(`Saved availability for ${userName}!`);
+    } catch (error) {
+      console.error('Error saving availability:', error);
+      alert('Failed to save availability. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -144,6 +183,19 @@ function EventView({ event, onBack }: EventViewProps) {
   };
 
   const shareableLink = `${window.location.origin}?event=${event.id}`;
+
+  if (isLoading) {
+    return (
+      <div className="event-view-container">
+        <button onClick={onBack} className="btn-back mb-6">
+          ← Back to Home
+        </button>
+        <div style={{ textAlign: 'center', padding: '3rem' }}>
+          <p style={{ color: 'var(--gray-600)' }}>Loading event...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="event-view-container" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
@@ -185,17 +237,18 @@ function EventView({ event, onBack }: EventViewProps) {
             onChange={(e) => setUserName(e.target.value)}
             placeholder="Enter your name"
             className="input user-input-flex"
+            disabled={isSaving}
           />
           <button
             onClick={handleSave}
-            disabled={!userName || selectedCells.size === 0}
+            disabled={!userName || selectedCells.size === 0 || isSaving}
             className="btn btn-save btn-nowrap"
             style={{
-              opacity: !userName || selectedCells.size === 0 ? 0.5 : 1,
-              cursor: !userName || selectedCells.size === 0 ? 'not-allowed' : 'pointer'
+              opacity: !userName || selectedCells.size === 0 || isSaving ? 0.5 : 1,
+              cursor: !userName || selectedCells.size === 0 || isSaving ? 'not-allowed' : 'pointer'
             }}
           >
-            Save Availability
+            {isSaving ? 'Saving...' : 'Save Availability'}
           </button>
         </div>
       </div>
@@ -213,7 +266,7 @@ function EventView({ event, onBack }: EventViewProps) {
           ))}
 
           {/* Time Slots */}
-          {timeSlots.map(({ hour, minute }, index) => (
+          {timeSlots.map(({ hour, minute }) => (
             <React.Fragment key={`${hour}-${minute}`}>
               <div className="calendar-time-label">
                 {minute === 0 ? `${hour.toString().padStart(2, '0')}:00` : ''}
@@ -224,7 +277,7 @@ function EventView({ event, onBack }: EventViewProps) {
                 const isValid = isValidCell(date, hour, minute);
                 const usersInCell = getUsersForCell(date, hour, minute);
                 const intensity = Math.min(usersInCell.length / (users.length || 1), 1);
-                const isLocked = !userName;
+                const isLocked = !userName || isSaving;
 
                 return (
                   <div
@@ -263,7 +316,7 @@ function EventView({ event, onBack }: EventViewProps) {
         </div>
       )}
 
-      {userName && (
+      {userName && !isSaving && (
         <div className="calendar-instructions">
           💡 Click and drag to select your available times
         </div>
