@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import type { Event, Availability } from '../types';
 import { mockAvailabilities } from '../App';
 
@@ -9,68 +9,144 @@ interface EventViewProps {
 
 function EventView({ event, onBack }: EventViewProps) {
   const [userName, setUserName] = useState('');
-  const [selectedSlots, setSelectedSlots] = useState(new Set<string>());
+  const [selectedCells, setSelectedCells] = useState(new Set<string>());
   const [availabilities, setAvailabilities] = useState<Availability[]>(mockAvailabilities);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<'select' | 'deselect' | null>(null);
+  const draggedCellsRef = useRef(new Set<string>());
+
+  // Get unique dates from time slots
+  const dates = Array.from(new Set(event.timeSlots.map(s => s.date))).sort();
+
+  // Get hour range from all time slots and create 15-min intervals
+  const allHours = event.timeSlots.flatMap(s => [s.startHour, s.endHour]);
+  const minHour = Math.min(...allHours);
+  const maxHour = Math.max(...allHours);
+
+  // Create 15-minute time slots: each hour has 4 slots (0, 15, 30, 45)
+  const timeSlots: Array<{ hour: number; minute: number }> = [];
+  for (let h = minHour; h < maxHour; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      timeSlots.push({ hour: h, minute: m });
+    }
+  }
 
   const users = Array.from(new Set(availabilities.map(a => a.userName)));
 
-  const toggleSlot = (slotId: string) => {
-    if (!isEditing || !userName) return;
+  const getCellId = (date: string, hour: number, minute: number) => `${date}-${hour}-${minute}`;
 
-    const newSelected = new Set(selectedSlots);
-    if (newSelected.has(slotId)) {
-      newSelected.delete(slotId);
-    } else {
-      newSelected.add(slotId);
-    }
-    setSelectedSlots(newSelected);
+  // Check if a cell is within a valid time slot
+  const isValidCell = (date: string, hour: number, minute: number) => {
+    return event.timeSlots.some(slot => {
+      if (slot.date !== date) return false;
+      const cellTime = hour + minute / 60;
+      return cellTime >= slot.startHour && cellTime < slot.endHour;
+    });
   };
 
-  const handleStartEditing = () => {
+  // Get users available for a specific cell
+  const getUsersForCell = (date: string, hour: number, minute: number) => {
+    return availabilities.filter(a => {
+      const slot = event.timeSlots.find(s => s.id === a.timeSlotId);
+      if (!slot || slot.date !== date) return false;
+      const cellTime = hour + minute / 60;
+      return cellTime >= slot.startHour && cellTime < slot.endHour;
+    }).map(a => a.userName);
+  };
+
+  const handleMouseDown = (date: string, hour: number, minute: number) => {
     if (!userName) {
       alert('Please enter your name first');
       return;
     }
 
-    const userAvail = availabilities
-      .filter(a => a.userName === userName)
-      .map(a => a.timeSlotId);
-    setSelectedSlots(new Set(userAvail));
-    setIsEditing(true);
+    if (!isValidCell(date, hour, minute)) return;
+
+    const cellId = getCellId(date, hour, minute);
+    setIsDragging(true);
+    draggedCellsRef.current = new Set([cellId]);
+
+    if (selectedCells.has(cellId)) {
+      setDragMode('deselect');
+      setSelectedCells(prev => {
+        const next = new Set(prev);
+        next.delete(cellId);
+        return next;
+      });
+    } else {
+      setDragMode('select');
+      setSelectedCells(prev => new Set(prev).add(cellId));
+    }
+  };
+
+  const handleMouseEnter = (date: string, hour: number, minute: number) => {
+    if (!isDragging || !dragMode || !isValidCell(date, hour, minute)) return;
+
+    const cellId = getCellId(date, hour, minute);
+    if (draggedCellsRef.current.has(cellId)) return;
+
+    draggedCellsRef.current.add(cellId);
+
+    if (dragMode === 'select') {
+      setSelectedCells(prev => new Set(prev).add(cellId));
+    } else {
+      setSelectedCells(prev => {
+        const next = new Set(prev);
+        next.delete(cellId);
+        return next;
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setDragMode(null);
+    draggedCellsRef.current.clear();
   };
 
   const handleSave = () => {
+    if (!userName || selectedCells.size === 0) {
+      alert('Please enter your name and select available times');
+      return;
+    }
+
+    // Remove existing availability for this user
     const filtered = mockAvailabilities.filter(a => a.userName !== userName);
 
-    selectedSlots.forEach(slotId => {
-      filtered.push({ userName, timeSlotId: slotId });
+    // Add new availability based on selected cells
+    selectedCells.forEach(cellId => {
+      const parts = cellId.split('-');
+      const date = parts.slice(0, 3).join('-');
+      const hour = parseInt(parts[3]);
+      const minute = parseInt(parts[4]);
+
+      // Find matching time slot
+      const cellTime = hour + minute / 60;
+      const slot = event.timeSlots.find(s =>
+        s.date === date && cellTime >= s.startHour && cellTime < s.endHour
+      );
+
+      if (slot && !filtered.some(a => a.userName === userName && a.timeSlotId === slot.id)) {
+        filtered.push({ userName, timeSlotId: slot.id });
+      }
     });
 
     mockAvailabilities.length = 0;
     mockAvailabilities.push(...filtered);
     setAvailabilities([...mockAvailabilities]);
-    setIsEditing(false);
-    setSelectedSlots(new Set());
+    setSelectedCells(new Set());
+    alert(`Saved availability for ${userName}!`);
   };
 
-  const handleCancel = () => {
-    setIsEditing(false);
-    setSelectedSlots(new Set());
-  };
-
-  const isUserAvailable = (userName: string, slotId: string) => {
-    return availabilities.some(a => a.userName === userName && a.timeSlotId === slotId);
-  };
-
-  const getSlotCount = (slotId: string) => {
-    return availabilities.filter(a => a.timeSlotId === slotId).length;
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
   const shareableLink = `${window.location.origin}?event=${event.id}`;
 
   return (
-    <div className="event-view-container">
+    <div className="event-view-container" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
       <button onClick={onBack} className="btn-back mb-6">
         ← Back to Home
       </button>
@@ -108,93 +184,93 @@ function EventView({ event, onBack }: EventViewProps) {
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
             placeholder="Enter your name"
-            disabled={isEditing}
-            className={`input user-input-flex ${isEditing ? 'input-disabled' : ''}`}
+            className="input user-input-flex"
           />
-          {!isEditing ? (
-            <button onClick={handleStartEditing} className="btn btn-primary btn-nowrap">
-              Edit Availability
-            </button>
-          ) : (
-            <>
-              <button onClick={handleSave} className="btn btn-save">Save</button>
-              <button onClick={handleCancel} className="btn btn-cancel">Cancel</button>
-            </>
-          )}
+          <button
+            onClick={handleSave}
+            disabled={!userName || selectedCells.size === 0}
+            className="btn btn-save btn-nowrap"
+            style={{
+              opacity: !userName || selectedCells.size === 0 ? 0.5 : 1,
+              cursor: !userName || selectedCells.size === 0 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Save Availability
+          </button>
         </div>
       </div>
 
-      <div className="card card-overflow">
-        <table className="availability-table">
-          <thead>
-            <tr>
-              <th className="availability-table-header availability-table-header-timeslot">
-                Time Slot
-              </th>
-              {users.map(user => (
-                <th key={user} className="availability-table-header availability-table-user">
-                  {user}
-                </th>
-              ))}
-              {isEditing && userName && !users.includes(userName) && (
-                <th className="availability-table-header availability-table-user availability-table-user-current">
-                  {userName} (You)
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {event.timeSlots.map(slot => {
-              const count = getSlotCount(slot.id);
-              const intensity = Math.min(count / (users.length + 1), 1);
+      <div className="calendar-week-container">
+        <div className="calendar-week-grid" style={{
+          gridTemplateColumns: `80px repeat(${dates.length}, 1fr)`
+        }}>
+          {/* Day Headers */}
+          <div style={{ background: 'var(--gray-100)' }}></div>
+          {dates.map(date => (
+            <div key={date} className="calendar-day-header">
+              {formatDate(date)}
+            </div>
+          ))}
 
-              return (
-                <tr key={slot.id}>
-                  <td className="availability-table-timeslot">
-                    <div className="timeslot-date">
-                      {new Date(slot.date).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
-                    </div>
-                    <div className="timeslot-time">
-                      {slot.startHour.toString().padStart(2, '0')}:00 - {slot.endHour.toString().padStart(2, '0')}:00
-                    </div>
-                    <div className="timeslot-count">
-                      {count} {count === 1 ? 'person' : 'people'}
-                    </div>
-                  </td>
-                  {users.map(user => (
-                    <td key={user} className="availability-table-cell">
-                      <div
-                        className="availability-cell"
-                        style={{
-                          backgroundColor: isUserAvailable(user, slot.id)
-                            ? `rgba(34, 197, 94, ${0.3 + intensity * 0.7})`
-                            : 'var(--gray-100)'
-                        }}
-                      >
-                        {isUserAvailable(user, slot.id) ? '✓' : ''}
+          {/* Time Slots */}
+          {timeSlots.map(({ hour, minute }) => (
+            <React.Fragment key={`${hour}-${minute}`}>
+              <div className="calendar-time-label">
+                {hour.toString().padStart(2, '0')}:{minute.toString().padStart(2, '0')}
+              </div>
+              {dates.map(date => {
+                const cellId = getCellId(date, hour, minute);
+                const isSelected = selectedCells.has(cellId);
+                const isValid = isValidCell(date, hour, minute);
+                const usersInCell = getUsersForCell(date, hour, minute);
+                const intensity = Math.min(usersInCell.length / (users.length || 1), 1);
+
+                return (
+                  <div
+                    key={cellId}
+                    onMouseDown={() => handleMouseDown(date, hour, minute)}
+                    onMouseEnter={() => handleMouseEnter(date, hour, minute)}
+                    className={`calendar-cell ${isSelected ? 'calendar-cell-selected' : ''} ${!isValid ? 'calendar-cell-unavailable' : ''}`}
+                    style={{
+                      backgroundColor: !isSelected && usersInCell.length > 0
+                        ? `rgba(147, 51, 234, ${0.1 + intensity * 0.3})`
+                        : undefined,
+                      cursor: isValid ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    {usersInCell.length > 0 && !isSelected && (
+                      <div className="calendar-cell-availability">
+                        {usersInCell.length}
                       </div>
-                    </td>
-                  ))}
-                  {isEditing && userName && !users.includes(userName) && (
-                    <td className="availability-table-cell">
-                      <div
-                        onClick={() => toggleSlot(slot.id)}
-                        className={`availability-cell availability-cell-editable ${selectedSlots.has(slot.id) ? 'availability-cell-selected' : ''}`}
-                      >
-                        {selectedSlots.has(slot.id) ? '✓' : ''}
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    )}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
       </div>
+
+      {userName && (
+        <div className="calendar-instructions">
+          💡 Click and drag to select your available times
+        </div>
+      )}
+
+      {users.length > 0 && (
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+          <h3 style={{ fontWeight: '600', marginBottom: '1rem' }}>
+            Participants ({users.length})
+          </h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {users.map(user => (
+              <span key={user} className="tag">
+                {user}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
