@@ -213,10 +213,10 @@ function EventView({ event, onBack }: EventViewProps) {
           ))}
 
           {/* Time Slots */}
-          {timeSlots.map(({ hour, minute }) => (
+          {timeSlots.map(({ hour, minute }, index) => (
             <React.Fragment key={`${hour}-${minute}`}>
               <div className="calendar-time-label">
-                {hour.toString().padStart(2, '0')}:{minute.toString().padStart(2, '0')}
+                {minute === 0 ? `${hour.toString().padStart(2, '0')}:00` : ''}
               </div>
               {dates.map(date => {
                 const cellId = getCellId(date, hour, minute);
@@ -224,18 +224,20 @@ function EventView({ event, onBack }: EventViewProps) {
                 const isValid = isValidCell(date, hour, minute);
                 const usersInCell = getUsersForCell(date, hour, minute);
                 const intensity = Math.min(usersInCell.length / (users.length || 1), 1);
+                const isLocked = !userName;
 
                 return (
                   <div
                     key={cellId}
-                    onMouseDown={() => handleMouseDown(date, hour, minute)}
-                    onMouseEnter={() => handleMouseEnter(date, hour, minute)}
-                    className={`calendar-cell ${isSelected ? 'calendar-cell-selected' : ''} ${!isValid ? 'calendar-cell-unavailable' : ''}`}
+                    onMouseDown={() => !isLocked && handleMouseDown(date, hour, minute)}
+                    onMouseEnter={() => !isLocked && handleMouseEnter(date, hour, minute)}
+                    className={`calendar-cell ${isSelected ? 'calendar-cell-selected' : ''} ${!isValid || isLocked ? 'calendar-cell-unavailable' : ''}`}
                     style={{
                       backgroundColor: !isSelected && usersInCell.length > 0
                         ? `rgba(147, 51, 234, ${0.1 + intensity * 0.3})`
                         : undefined,
-                      cursor: isValid ? 'pointer' : 'not-allowed'
+                      cursor: isLocked ? 'not-allowed' : (isValid ? 'pointer' : 'not-allowed'),
+                      opacity: isLocked ? 0.6 : 1
                     }}
                   >
                     {usersInCell.length > 0 && !isSelected && (
@@ -250,6 +252,16 @@ function EventView({ event, onBack }: EventViewProps) {
           ))}
         </div>
       </div>
+
+      {!userName && (
+        <div className="calendar-instructions" style={{
+          background: '#fef3c7',
+          borderColor: '#fbbf24',
+          color: '#92400e'
+        }}>
+          ⚠️ Please enter your name above to select your availability
+        </div>
+      )}
 
       {userName && (
         <div className="calendar-instructions">
