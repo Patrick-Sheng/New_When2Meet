@@ -336,6 +336,18 @@ function EventView({ event, onBack }: EventViewProps) {
         </div>
       </div>
 
+      {/* Instruction moved ABOVE name input */}
+      {!userName && (
+        <div className="calendar-instructions" style={{
+          background: '#fef3c7',
+          borderColor: '#fbbf24',
+          color: '#92400e',
+          marginBottom: '1.5rem'
+        }}>
+          ⚠️ Please enter your name below to select your availability
+        </div>
+      )}
+
       <div className="card mb-6">
         <label className="form-label">Your Name</label>
         <div className="user-input-group">
@@ -494,16 +506,6 @@ function EventView({ event, onBack }: EventViewProps) {
           ))}
         </div>
       </div>
-
-      {!userName && (
-        <div className="calendar-instructions" style={{
-          background: '#fef3c7',
-          borderColor: '#fbbf24',
-          color: '#92400e'
-        }}>
-          ⚠️ Please enter your name above to select your availability
-        </div>
-      )}
 
       {userName && !isSaving && isEditMode && !isEditingExisting && (
         <div className="calendar-instructions">
