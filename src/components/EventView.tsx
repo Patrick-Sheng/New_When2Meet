@@ -17,6 +17,7 @@ function EventView({ event, onBack }: EventViewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hoveredCell, setHoveredCell] = useState<string | null>(null);
+  const [hoveredUser, setHoveredUser] = useState<string | null>(null);
   const [isEditingExisting, setIsEditingExisting] = useState(false);
   const [hasExistingData, setHasExistingData] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -180,6 +181,13 @@ function EventView({ event, onBack }: EventViewProps) {
         .filter(a => a.timeSlotId === cellId)
         .map(a => a.userName);
     }
+  };
+
+  // Check if a specific user selected a cell
+  const isUserAvailableForCell = (cellId: string, user: string) => {
+    return availabilities.some(
+      a => a.timeSlotId === cellId && a.userName === user
+    );
   };
 
   const handleMouseDown = (date: string, hour: number, minute: number) => {
@@ -405,11 +413,16 @@ function EventView({ event, onBack }: EventViewProps) {
       {users.length > 0 && (
         <div className="card mb-6">
           <h3 style={{ fontWeight: '600', marginBottom: '1rem' }}>
-            Participants ({users.length})
+            Participants ({users.length}) - Hover to highlight their availability
           </h3>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             {users.map(user => (
-              <span key={user} className="tag">
+              <span
+                key={user}
+                className={`tag participant-tag ${hoveredUser === user ? 'participant-tag-active' : ''}`}
+                onMouseEnter={() => setHoveredUser(user)}
+                onMouseLeave={() => setHoveredUser(null)}
+              >
                 {user}
               </span>
             ))}
@@ -441,6 +454,9 @@ function EventView({ event, onBack }: EventViewProps) {
                 const isValid = isValidCell(date, hour, minute);
                 const usersInCell = getUsersForCell(date, hour, minute);
 
+                // Check if hovered user selected this cell
+                const isHoveredUserCell = hoveredUser && isUserAvailableForCell(cellId, hoveredUser);
+
                 // Calculate total count (other users + current user if selected)
                 const totalCount = isEditMode && isSelected ? usersInCell.length + 1 : usersInCell.length;
                 const intensity = Math.min(usersInCell.length / (users.length || 1), 1);
@@ -460,7 +476,7 @@ function EventView({ event, onBack }: EventViewProps) {
                       handleCellHover(date, hour, minute);
                     }}
                     onMouseLeave={handleCellLeave}
-                    className={`calendar-cell ${isSelected ? 'calendar-cell-selected' : ''} ${!isValid || isLocked ? 'calendar-cell-unavailable' : ''}`}
+                    className={`calendar-cell ${isSelected ? 'calendar-cell-selected' : ''} ${!isValid || isLocked ? 'calendar-cell-unavailable' : ''} ${isHoveredUserCell ? 'calendar-cell-user-highlighted' : ''}`}
                     style={{
                       backgroundColor: !isSelected && usersInCell.length > 0
                         ? `rgba(147, 51, 234, ${0.1 + intensity * 0.3})`
