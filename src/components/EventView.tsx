@@ -17,6 +17,9 @@ function EventView({ event, onBack }: EventViewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hoveredCell, setHoveredCell] = useState<string | null>(null);
+  const [isEditingExisting, setIsEditingExisting] = useState(false);
+  const [hasExistingData, setHasExistingData] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
   const draggedCellsRef = useRef(new Set<string>());
 
   // Load availability and time slots on mount
@@ -32,6 +35,37 @@ function EventView({ event, onBack }: EventViewProps) {
     };
     loadData();
   }, [event.id]);
+
+  // Load user's existing selections when they enter their name
+  useEffect(() => {
+    if (userName.trim()) {
+      loadUserSelections(userName.trim());
+    } else {
+      setSelectedCells(new Set());
+      setIsEditingExisting(false);
+      setHasExistingData(false);
+      setIsEditMode(false);
+    }
+  }, [userName, availabilities]);
+
+  const loadUserSelections = (name: string) => {
+    // Find all cells this user has selected
+    const userCells = availabilities
+      .filter(a => a.userName.toLowerCase() === name.toLowerCase())
+      .map(a => a.timeSlotId);
+
+    if (userCells.length > 0) {
+      setSelectedCells(new Set(userCells));
+      setHasExistingData(true);
+      setIsEditingExisting(true);
+      setIsEditMode(false); // Start in view mode, not edit mode
+    } else {
+      setSelectedCells(new Set());
+      setHasExistingData(false);
+      setIsEditingExisting(false);
+      setIsEditMode(true); // New user, go straight to edit mode
+    }
+  };
 
   const [validCells, setValidCells] = useState<Set<string>>(new Set());
   const [dates, setDates] = useState<string[]>([]);
@@ -131,15 +165,16 @@ function EventView({ event, onBack }: EventViewProps) {
     return validCells.has(cellId);
   };
 
-  // Get users available for a specific cell
+  // Get users available for a specific cell (excluding current user's unsaved selections)
   const getUsersForCell = (date: string, hour: number, minute: number) => {
     const cellId = getCellId(date, hour, minute);
-    return availabilities.filter(a => a.timeSlotId === cellId).map(a => a.userName);
+    return availabilities
+      .filter(a => a.timeSlotId === cellId && a.userName.toLowerCase() !== userName.toLowerCase())
+      .map(a => a.userName);
   };
 
   const handleMouseDown = (date: string, hour: number, minute: number) => {
-    if (!userName) {
-      alert('Please enter your name first');
+    if (!userName || !isEditMode) {
       return;
     }
 
@@ -163,7 +198,7 @@ function EventView({ event, onBack }: EventViewProps) {
   };
 
   const handleMouseEnter = (date: string, hour: number, minute: number) => {
-    if (!isDragging || !dragMode || !isValidCell(date, hour, minute)) return;
+    if (!isDragging || !dragMode || !isValidCell(date, hour, minute) || !isEditMode) return;
 
     const cellId = getCellId(date, hour, minute);
     if (draggedCellsRef.current.has(cellId)) return;
@@ -185,7 +220,7 @@ function EventView({ event, onBack }: EventViewProps) {
     const cellId = getCellId(date, hour, minute);
     const usersInCell = getUsersForCell(date, hour, minute);
 
-    // Only show tooltip if there are users or if cell is selected by current user
+    // Show tooltip if there are other users or if cell is selected by current user
     if (usersInCell.length > 0 || selectedCells.has(cellId)) {
       setHoveredCell(cellId);
     }
@@ -216,20 +251,29 @@ function EventView({ event, onBack }: EventViewProps) {
 
       await availabilityApi.saveAvailability(
         event.id,
-        userName,
+        userName.trim(),
         cellIds
       );
 
       await loadAvailability();
 
-      setSelectedCells(new Set());
-      alert(`Saved availability for ${userName}!`);
+      const action = isEditingExisting ? 'Updated' : 'Saved';
+      alert(`${action} availability for ${userName}!`);
+
+      // After saving, exit edit mode
+      setIsEditMode(false);
+      setHasExistingData(true);
+      setIsEditingExisting(true);
     } catch (error) {
       console.error('Error saving availability:', error);
       alert('Failed to save availability. Please try again.');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleEditClick = () => {
+    setIsEditMode(true);
   };
 
   const formatDate = (dateStr: string) => {
@@ -294,18 +338,47 @@ function EventView({ event, onBack }: EventViewProps) {
             className="input user-input-flex"
             disabled={isSaving}
           />
-          <button
-            onClick={handleSave}
-            disabled={!userName || selectedCells.size === 0 || isSaving}
-            className="btn btn-save btn-nowrap"
-            style={{
-              opacity: !userName || selectedCells.size === 0 || isSaving ? 0.5 : 1,
-              cursor: !userName || selectedCells.size === 0 || isSaving ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {isSaving ? 'Saving...' : 'Save Availability'}
-          </button>
+          {hasExistingData && !isEditMode ? (
+            <button
+              onClick={handleEditClick}
+              className="btn btn-secondary btn-nowrap"
+            >
+              Edit Availability
+            </button>
+          ) : (
+            <button
+              onClick={handleSave}
+              disabled={!userName || selectedCells.size === 0 || isSaving}
+              className="btn btn-save btn-nowrap"
+              style={{
+                opacity: !userName || selectedCells.size === 0 || isSaving ? 0.5 : 1,
+                cursor: !userName || selectedCells.size === 0 || isSaving ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isSaving ? 'Saving...' : isEditingExisting ? 'Update Availability' : 'Save Availability'}
+            </button>
+          )}
         </div>
+        {hasExistingData && !isEditMode && (
+          <p style={{
+            marginTop: '0.75rem',
+            fontSize: '0.875rem',
+            color: 'var(--green-500)',
+            fontWeight: '500'
+          }}>
+            ✓ Your availability is saved
+          </p>
+        )}
+        {isEditMode && isEditingExisting && (
+          <p style={{
+            marginTop: '0.75rem',
+            fontSize: '0.875rem',
+            color: 'var(--primary-blue)',
+            fontWeight: '500'
+          }}>
+            ✏️ Editing mode - make changes and click Update
+          </p>
+        )}
       </div>
 
       {users.length > 0 && (
@@ -347,7 +420,7 @@ function EventView({ event, onBack }: EventViewProps) {
                 const isValid = isValidCell(date, hour, minute);
                 const usersInCell = getUsersForCell(date, hour, minute);
                 const intensity = Math.min(usersInCell.length / (users.length || 1), 1);
-                const isLocked = !userName || isSaving;
+                const isLocked = !userName || isSaving || !isEditMode;
                 const isHovered = hoveredCell === cellId;
                 const showTooltip = isHovered && (usersInCell.length > 0 || isSelected);
 
@@ -381,13 +454,13 @@ function EventView({ event, onBack }: EventViewProps) {
                     {showTooltip && (
                       <div className={`calendar-cell-tooltip ${showTooltip ? 'visible' : ''}`}>
                         {isSelected && usersInCell.length === 0 ? (
-                          <div>You (not saved)</div>
+                          <div>You {hasExistingData && !isEditMode ? '' : isEditMode ? '(editing)' : '(not saved)'}</div>
                         ) : (
                           <div className="tooltip-users">
                             {isSelected && (
                               <div className="tooltip-user">
                                 <div className="tooltip-user-dot"></div>
-                                <span>You (not saved)</span>
+                                <span>You {hasExistingData && !isEditMode ? '' : isEditMode ? '(editing)' : '(not saved)'}</span>
                               </div>
                             )}
                             {usersInCell.map(user => (
@@ -418,9 +491,29 @@ function EventView({ event, onBack }: EventViewProps) {
         </div>
       )}
 
-      {userName && !isSaving && (
+      {userName && !isSaving && isEditMode && !isEditingExisting && (
         <div className="calendar-instructions">
           💡 Click and drag to select your available times. Hover over cells to see who's available.
+        </div>
+      )}
+
+      {userName && !isSaving && isEditMode && isEditingExisting && (
+        <div className="calendar-instructions" style={{
+          background: '#dbeafe',
+          borderColor: '#3b82f6',
+          color: '#1e40af'
+        }}>
+          ✏️ You're editing your previous selections. Make changes and click "Update Availability" to save.
+        </div>
+      )}
+
+      {userName && hasExistingData && !isEditMode && (
+        <div className="calendar-instructions" style={{
+          background: '#f0fdf4',
+          borderColor: '#86efac',
+          color: '#166534'
+        }}>
+          ✓ Your availability is displayed below. Click "Edit Availability" to make changes.
         </div>
       )}
     </div>
