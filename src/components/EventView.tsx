@@ -165,12 +165,21 @@ function EventView({ event, onBack }: EventViewProps) {
     return validCells.has(cellId);
   };
 
-  // Get users available for a specific cell (excluding current user's unsaved selections)
+  // Get users available for a specific cell (excluding current user if in edit mode)
   const getUsersForCell = (date: string, hour: number, minute: number) => {
     const cellId = getCellId(date, hour, minute);
-    return availabilities
-      .filter(a => a.timeSlotId === cellId && a.userName.toLowerCase() !== userName.toLowerCase())
-      .map(a => a.userName);
+
+    // If user is in edit mode, exclude them from the count
+    // If user is in view mode, include everyone
+    if (isEditMode && userName) {
+      return availabilities
+        .filter(a => a.timeSlotId === cellId && a.userName.toLowerCase() !== userName.toLowerCase())
+        .map(a => a.userName);
+    } else {
+      return availabilities
+        .filter(a => a.timeSlotId === cellId)
+        .map(a => a.userName);
+    }
   };
 
   const handleMouseDown = (date: string, hour: number, minute: number) => {
@@ -419,7 +428,11 @@ function EventView({ event, onBack }: EventViewProps) {
                 const isSelected = selectedCells.has(cellId);
                 const isValid = isValidCell(date, hour, minute);
                 const usersInCell = getUsersForCell(date, hour, minute);
+
+                // Calculate total count (other users + current user if selected)
+                const totalCount = isEditMode && isSelected ? usersInCell.length + 1 : usersInCell.length;
                 const intensity = Math.min(usersInCell.length / (users.length || 1), 1);
+
                 const isLocked = !userName || isSaving || !isEditMode;
                 const isHovered = hoveredCell === cellId;
                 const showTooltip = isHovered && (usersInCell.length > 0 || isSelected);
@@ -444,9 +457,10 @@ function EventView({ event, onBack }: EventViewProps) {
                       opacity: isLocked ? 0.6 : 1
                     }}
                   >
-                    {usersInCell.length > 0 && !isSelected && (
+                    {/* Show count if there are other users OR if current user selected it in edit mode */}
+                    {totalCount > 0 && (
                       <div className="calendar-cell-availability">
-                        {usersInCell.length}
+                        {totalCount}
                       </div>
                     )}
 
