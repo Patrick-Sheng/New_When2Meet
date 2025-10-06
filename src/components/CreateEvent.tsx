@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import type { Event, TimeSlot } from '../types';
 import { eventApi } from '../supabaseClient';
 
@@ -14,7 +14,6 @@ function CreateEvent({ onBack, onEventCreated }: CreateEventProps) {
   const [startHour, setStartHour] = useState(9);
   const [endHour, setEndHour] = useState(17);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStartDate, setDragStartDate] = useState<string | null>(null);
   const [dragMode, setDragMode] = useState<'select' | 'deselect' | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const draggedDatesRef = useRef(new Set<string>());
@@ -63,7 +62,6 @@ function CreateEvent({ onBack, onEventCreated }: CreateEventProps) {
 
   const handleMouseDown = (dateStr: string) => {
     setIsDragging(true);
-    setDragStartDate(dateStr);
     draggedDatesRef.current = new Set([dateStr]);
 
     if (selectedDates.includes(dateStr)) {
@@ -95,7 +93,6 @@ function CreateEvent({ onBack, onEventCreated }: CreateEventProps) {
 
   const handleMouseUp = () => {
     setIsDragging(false);
-    setDragStartDate(null);
     setDragMode(null);
     draggedDatesRef.current.clear();
   };
