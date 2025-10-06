@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import HomeView from './components/HomeView';
 import CreateEvent from './components/CreateEvent';
 import EventView from './components/EventView';
