@@ -878,7 +878,7 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: var(--green-500);
+  background-color: white;
 }
 
 /* Calendar cell needs relative positioning for tooltip */
@@ -908,29 +908,294 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-/* Calendar Cell User Highlight */
 .calendar-cell-user-highlighted {
-  background-color: rgba(34, 197, 94, 0.4) !important;
+  transition: all 0.2s ease;
+}
+
+/* Status button styles */
+.status-btn {
+  transition: all 0.2s ease;
+}
+
+.status-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.status-btn-active {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
+/* Calendar cell status styles */
+.calendar-cell-available {
+  background-color: rgba(34, 197, 94, 0.3) !important;
   border: 2px solid var(--green-500) !important;
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
-  animation: pulse-highlight 0.6s ease-in-out;
 }
 
-@keyframes pulse-highlight {
+.calendar-cell-if-needed {
+  background-color: rgba(234, 179, 8, 0.3) !important;
+  border: 2px solid #eab308 !important;
+}
 
-  0%,
-  100% {
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+.calendar-cell-unavailable-status {
+  background-color: rgba(107, 114, 128, 0.3) !important;
+  border: 2px solid var(--gray-500) !important;
+}
+
+/* Enhanced tooltip for status display */
+.tooltip-user-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Status legend */
+.status-legend {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1rem;
+  background: var(--gray-50);
+  border-radius: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+}
+
+.status-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.status-indicator-available {
+  background-color: var(--green-500);
+}
+
+.status-indicator-if-needed {
+  background-color: #eab308;
+}
+
+.status-indicator-unavailable {
+  background-color: var(--gray-500);
+}
+
+/* Update calendar cell to handle multiple status displays */
+.calendar-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Count badges in corner */
+.calendar-cell-counts {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Responsive adjustments for status buttons */
+@media (max-width: 768px) {
+  .status-btn {
+    font-size: 0.875rem;
+    padding: 0.4rem 0.75rem;
   }
 
-  50% {
-    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.4);
+  .calendar-cell-counts {
+    font-size: 0.6rem;
   }
 }
 
-/* Override selected cell styling when user is highlighted */
-.calendar-cell-selected.calendar-cell-user-highlighted {
-  background-color: rgba(34, 197, 94, 0.8) !important;
+/* Add these styles to your index.css at the end */
+
+/* Status Selection Buttons */
+.status-selector-container {
+  margin-top: 1rem;
+}
+
+.status-selector-buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.status-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 2px solid var(--gray-300);
+  background: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.status-btn-active {
+  font-weight: 600;
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
+/* Status Button Variants */
+.status-btn-available {
+  border-color: var(--gray-300);
+  background: white;
+}
+
+.status-btn-available.status-btn-active {
+  border-color: var(--green-500);
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.status-btn-if-needed {
+  border-color: var(--gray-300);
+  background: white;
+}
+
+.status-btn-if-needed.status-btn-active {
+  border-color: #eab308;
+  background: rgba(234, 179, 8, 0.2);
+}
+
+.status-btn-unavailable {
+  border-color: var(--gray-300);
+  background: white;
+}
+
+.status-btn-unavailable.status-btn-active {
+  border-color: var(--gray-500);
+  background: rgba(107, 114, 128, 0.2);
+}
+
+/* Status Emoji */
+.status-emoji {
+  font-size: 1rem;
+}
+
+/* User Highlight Styles - Dynamic by Status */
+.calendar-cell-user-highlighted {
+  transition: all 0.2s ease;
+}
+
+/* Available Status Highlight */
+.calendar-cell-user-highlighted.status-available {
+  background-color: rgba(34, 197, 94, 0.6) !important;
   border: 2px solid var(--green-500) !important;
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+}
+
+/* If Needed Status Highlight */
+.calendar-cell-user-highlighted.status-if-needed {
+  background-color: rgba(234, 179, 8, 0.6) !important;
+  border: 2px solid #eab308 !important;
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.3);
+}
+
+/* Unavailable Status Highlight */
+.calendar-cell-user-highlighted.status-unavailable {
+  background-color: rgba(107, 114, 128, 0.6) !important;
+  border: 2px solid var(--gray-500) !important;
+  box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.3);
+}
+
+/* Calendar Cell Count Display */
+.calendar-cell-counts {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  gap: 2px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.count-available {
+  color: var(--green-500);
+}
+
+.count-if-needed {
+  color: #eab308;
+}
+
+.count-unavailable {
+  color: var(--gray-500);
+}
+
+/* Responsive adjustments for status buttons */
+@media (max-width: 768px) {
+  .status-btn {
+    font-size: 0.875rem;
+    padding: 0.4rem 0.75rem;
+  }
+
+  .calendar-cell-counts {
+    font-size: 0.6rem;
+  }
+}
+
+/* Add these styles to src/index.css after the existing tooltip styles */
+
+/* Tooltip Sections for Multi-Status Display */
+.tooltip-section {
+  margin-bottom: 8px;
+}
+
+.tooltip-section:last-child {
+  margin-bottom: 0;
+}
+
+.tooltip-section-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.tooltip-section-title {
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tooltip-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 4px;
+}
+
+.tooltip-username {
+  font-size: 0.75rem;
+}
+
+/* Override tooltip to allow for wider content with sections */
+.calendar-cell-tooltip {
+  white-space: normal;
+  max-width: 200px;
+  min-width: 120px;
 }
