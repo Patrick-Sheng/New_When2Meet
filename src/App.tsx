@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import HomeView from './components/HomeView';
 import CreateEvent from './components/CreateEvent';
 import EventView from './components/EventView';
 import type { Event } from './types';
 import { eventApi } from './supabaseClient';
+import { eventStorage, type StoredEvent } from './utils/eventStorage';
 
 function App() {
   const [view, setView] = useState('home');
   const [currentEvent, setCurrentEvent] = useState<Event | null>(null);
-  const [events, setEvents] = useState<Event[]>([]);
+  const [recentEvents, setRecentEvents] = useState<StoredEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load events from URL parameter on mount
@@ -19,7 +20,9 @@ function App() {
     if (eventId) {
       loadEvent(eventId);
     } else {
-      loadRecentEvents();
+      // Load from localStorage instead of database
+      setRecentEvents(eventStorage.getEvents());
+      setIsLoading(false);
     }
   }, []);
 
@@ -45,6 +48,10 @@ function App() {
         })
       };
 
+      // Save to localStorage
+      eventStorage.addEvent(loadedEvent.id, loadedEvent.title);
+      setRecentEvents(eventStorage.getEvents());
+
       setCurrentEvent(loadedEvent);
       setView('event');
     } catch (error) {
@@ -55,47 +62,20 @@ function App() {
     }
   };
 
-  const loadRecentEvents = async () => {
-    try {
-      setIsLoading(true);
-      const data = await eventApi.getAllEvents(10);
-
-      const loadedEvents: Event[] = data.map(item => ({
-        id: item.id,
-        title: item.title,
-        description: item.description || '',
-        timeSlots: (item.time_slots || []).map((slot: any) => {
-          const startDate = new Date(slot.start_time);
-          const endDate = new Date(slot.end_time);
-
-          return {
-            id: slot.id,
-            date: startDate.toISOString().split('T')[0],
-            startHour: startDate.getHours(),
-            endHour: endDate.getHours()
-          };
-        })
-      }));
-
-      setEvents(loadedEvents);
-    } catch (error) {
-      console.error('Error loading events:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleCreateClick = () => setView('create');
 
   const handleEventCreated = (event: Event) => {
     setCurrentEvent(event);
-    setEvents(prev => [event, ...prev]);
+
+    // Save to localStorage
+    eventStorage.addEvent(event.id, event.title);
+    setRecentEvents(eventStorage.getEvents());
+
     setView('event');
   };
 
-  const handleEventSelect = (event: Event) => {
-    setCurrentEvent(event);
-    setView('event');
+  const handleEventSelect = async (storedEvent: StoredEvent) => {
+    await loadEvent(storedEvent.id);
   };
 
   const handleBackToHome = () => {
@@ -103,6 +83,8 @@ function App() {
     setCurrentEvent(null);
     // Update URL to remove event parameter
     window.history.pushState({}, '', window.location.pathname);
+    // Refresh recent events from localStorage
+    setRecentEvents(eventStorage.getEvents());
   };
 
   if (isLoading && view === 'home') {
@@ -133,7 +115,7 @@ function App() {
       <main className="app-main">
         {view === 'home' && (
           <HomeView
-            events={events}
+            recentEvents={recentEvents}
             onCreateClick={handleCreateClick}
             onEventSelect={handleEventSelect}
           />
