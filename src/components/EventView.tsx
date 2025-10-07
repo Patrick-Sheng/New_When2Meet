@@ -193,18 +193,14 @@ function EventView({ event, onBack }: EventViewProps) {
     setIsDragging(true);
     draggedCellsRef.current = new Set([cellId]);
 
-    // Cycle through statuses or remove
     const currentCellStatus = selectedCells.get(cellId);
     const newCells = new Map(selectedCells);
 
     if (!currentCellStatus) {
-      // Not selected, set to current status
       newCells.set(cellId, currentStatus);
     } else if (currentCellStatus === currentStatus) {
-      // Same status, remove it
       newCells.delete(cellId);
     } else {
-      // Different status, update to current status
       newCells.set(cellId, currentStatus);
     }
 
@@ -255,8 +251,6 @@ function EventView({ event, onBack }: EventViewProps) {
         cellId,
         status
       }));
-
-      console.log('Saving availability with statuses:', cellData);
 
       await availabilityApi.saveAvailability(
         event.id,
@@ -379,54 +373,29 @@ function EventView({ event, onBack }: EventViewProps) {
           )}
         </div>
 
-        {/* Status Selection Buttons */}
         {userName && isEditMode && (
-          <div style={{ marginTop: '1rem' }}>
+          <div className="status-selector-container">
             <label className="form-label">Select status to paint:</label>
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div className="status-selector-buttons">
               <button
                 onClick={() => setCurrentStatus('available')}
-                className={`status-btn ${currentStatus === 'available' ? 'status-btn-active' : ''}`}
-                style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: '0.5rem',
-                  border: currentStatus === 'available' ? '2px solid var(--green-500)' : '2px solid var(--gray-300)',
-                  background: currentStatus === 'available' ? 'rgba(34, 197, 94, 0.2)' : 'white',
-                  fontWeight: currentStatus === 'available' ? '600' : '500',
-                  cursor: 'pointer'
-                }}
+                className={`status-btn status-btn-available ${currentStatus === 'available' ? 'status-btn-active' : ''}`}
               >
-                <span style={{ marginRight: '0.5rem' }}>🟢</span>
+                <span className="status-emoji">🟢</span>
                 Available
               </button>
               <button
                 onClick={() => setCurrentStatus('if-needed')}
-                className={`status-btn ${currentStatus === 'if-needed' ? 'status-btn-active' : ''}`}
-                style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: '0.5rem',
-                  border: currentStatus === 'if-needed' ? '2px solid #eab308' : '2px solid var(--gray-300)',
-                  background: currentStatus === 'if-needed' ? 'rgba(234, 179, 8, 0.2)' : 'white',
-                  fontWeight: currentStatus === 'if-needed' ? '600' : '500',
-                  cursor: 'pointer'
-                }}
+                className={`status-btn status-btn-if-needed ${currentStatus === 'if-needed' ? 'status-btn-active' : ''}`}
               >
-                <span style={{ marginRight: '0.5rem' }}>🟡</span>
+                <span className="status-emoji">🟡</span>
                 If Needed
               </button>
               <button
                 onClick={() => setCurrentStatus('unavailable')}
-                className={`status-btn ${currentStatus === 'unavailable' ? 'status-btn-active' : ''}`}
-                style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: '0.5rem',
-                  border: currentStatus === 'unavailable' ? '2px solid var(--gray-500)' : '2px solid var(--gray-300)',
-                  background: currentStatus === 'unavailable' ? 'rgba(107, 114, 128, 0.2)' : 'white',
-                  fontWeight: currentStatus === 'unavailable' ? '600' : '500',
-                  cursor: 'pointer'
-                }}
+                className={`status-btn status-btn-unavailable ${currentStatus === 'unavailable' ? 'status-btn-active' : ''}`}
               >
-                <span style={{ marginRight: '0.5rem' }}>⚫</span>
+                <span className="status-emoji">⚫</span>
                 Unavailable
               </button>
             </div>
@@ -479,7 +448,6 @@ function EventView({ event, onBack }: EventViewProps) {
         <div className="calendar-week-grid" style={{
           gridTemplateColumns: `80px repeat(${dates.length}, 1fr)`
         }}>
-          {/* Day Headers */}
           <div style={{ background: 'var(--gray-100)' }}></div>
           {dates.map(date => (
             <div key={date} className="calendar-day-header">
@@ -487,7 +455,6 @@ function EventView({ event, onBack }: EventViewProps) {
             </div>
           ))}
 
-          {/* Time Slots */}
           {timeSlots.map(({ hour, minute }) => (
             <React.Fragment key={`${hour}-${minute}`}>
               <div className="calendar-time-label">
@@ -502,12 +469,10 @@ function EventView({ event, onBack }: EventViewProps) {
                 const isHoveredUserCell = hoveredUser && isUserAvailableForCell(cellId, hoveredUser);
                 const hoveredUserStatus = hoveredUser ? getUserStatusForCell(cellId, hoveredUser) : null;
 
-                // Count users by status
                 const availableCount = usersInCell.filter(a => a.status === 'available').length;
                 const ifNeededCount = usersInCell.filter(a => a.status === 'if-needed').length;
                 const unavailableCount = usersInCell.filter(a => a.status === 'unavailable').length;
 
-                // Add current user's status if in edit mode
                 const totalAvailable = isEditMode && cellStatus === 'available' ? availableCount + 1 : availableCount;
                 const totalIfNeeded = isEditMode && cellStatus === 'if-needed' ? ifNeededCount + 1 : ifNeededCount;
                 const totalUnavailable = isEditMode && cellStatus === 'unavailable' ? unavailableCount + 1 : unavailableCount;
@@ -516,14 +481,11 @@ function EventView({ event, onBack }: EventViewProps) {
                 const isHovered = hoveredCell === cellId;
                 const showTooltip = isHovered && (usersInCell.length > 0 || cellStatus);
 
-                // Calculate background color based on status
                 let backgroundColor = 'white';
                 let borderColor = 'var(--gray-200)';
 
                 if (cellStatus) {
-                  // Current user has a status for this cell
                   if (isEditMode) {
-                    // Editing mode - brighter colors
                     switch (cellStatus) {
                       case 'available':
                         backgroundColor = 'rgba(34, 197, 94, 0.4)';
@@ -539,7 +501,6 @@ function EventView({ event, onBack }: EventViewProps) {
                         break;
                     }
                   } else {
-                    // View mode - show saved status
                     switch (cellStatus) {
                       case 'available':
                         backgroundColor = 'rgba(34, 197, 94, 0.3)';
@@ -556,18 +517,13 @@ function EventView({ event, onBack }: EventViewProps) {
                     }
                   }
                 } else if (availableCount > 0 || ifNeededCount > 0 || unavailableCount > 0) {
-                  // No current user status, but show other users' availability
-                  // Prioritize showing the most common status
                   if (availableCount >= ifNeededCount && availableCount >= unavailableCount) {
-                    // Green dominant
                     const intensity = Math.min(availableCount / (users.length || 1), 1);
                     backgroundColor = `rgba(34, 197, 94, ${0.1 + intensity * 0.2})`;
                   } else if (ifNeededCount > availableCount && ifNeededCount >= unavailableCount) {
-                    // Yellow dominant
                     const intensity = Math.min(ifNeededCount / (users.length || 1), 1);
                     backgroundColor = `rgba(234, 179, 8, ${0.1 + intensity * 0.2})`;
                   } else if (unavailableCount > 0) {
-                    // Grey dominant
                     const intensity = Math.min(unavailableCount / (users.length || 1), 1);
                     backgroundColor = `rgba(107, 114, 128, ${0.1 + intensity * 0.2})`;
                   }
@@ -584,67 +540,28 @@ function EventView({ event, onBack }: EventViewProps) {
                       handleCellHover(date, hour, minute);
                     }}
                     onMouseLeave={handleCellLeave}
-                    className={`calendar-cell ${!isValid || isLocked ? 'calendar-cell-unavailable' : ''} ${isHoveredUserCell ? 'calendar-cell-user-highlighted' : ''}`}
+                    className={`calendar-cell ${!isValid || isLocked ? 'calendar-cell-unavailable' : ''} ${isHoveredUserCell ? `calendar-cell-user-highlighted status-${hoveredUserStatus}` : ''}`}
                     style={{
-                      backgroundColor: isHoveredUserCell && hoveredUserStatus
-                        ? hoveredUserStatus === 'available'
-                          ? 'rgba(34, 197, 94, 0.6)'
-                          : hoveredUserStatus === 'if-needed'
-                            ? 'rgba(234, 179, 8, 0.6)'
-                            : 'rgba(107, 114, 128, 0.6)'
-                        : backgroundColor,
-                      border: isHoveredUserCell && hoveredUserStatus
-                        ? hoveredUserStatus === 'available'
-                          ? '2px solid var(--green-500)'
-                          : hoveredUserStatus === 'if-needed'
-                            ? '2px solid #eab308'
-                            : '2px solid var(--gray-500)'
-                        : cellStatus
-                          ? `2px solid ${borderColor}`
-                          : '1px solid var(--gray-200)',
+                      backgroundColor: !isHoveredUserCell ? backgroundColor : undefined,
+                      border: !isHoveredUserCell ? (cellStatus ? `2px solid ${borderColor}` : '1px solid var(--gray-200)') : undefined,
                       cursor: isLocked ? 'not-allowed' : (isValid ? 'pointer' : 'not-allowed'),
-                      opacity: isLocked && !cellStatus ? 0.6 : 1,
-                      position: 'relative',
-                      minHeight: '35px',
-                      boxShadow: isHoveredUserCell && hoveredUserStatus
-                        ? hoveredUserStatus === 'available'
-                          ? '0 0 0 2px rgba(34, 197, 94, 0.3)'
-                          : hoveredUserStatus === 'if-needed'
-                            ? '0 0 0 2px rgba(234, 179, 8, 0.3)'
-                            : '0 0 0 2px rgba(107, 114, 128, 0.3)'
-                        : 'none'
+                      opacity: isLocked && !cellStatus ? 0.6 : 1
                     }}
                   >
-                    {/* Show counts */}
                     {(totalAvailable > 0 || totalIfNeeded > 0 || totalUnavailable > 0) && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '2px',
-                        right: '2px',
-                        display: 'flex',
-                        gap: '2px',
-                        fontSize: '0.65rem',
-                        fontWeight: '600'
-                      }}>
+                      <div className="calendar-cell-counts">
                         {totalAvailable > 0 && (
-                          <span style={{ color: 'var(--green-500)' }}>
-                            {totalAvailable}
-                          </span>
+                          <span className="count-available">{totalAvailable}</span>
                         )}
                         {totalIfNeeded > 0 && (
-                          <span style={{ color: '#eab308' }}>
-                            {totalIfNeeded}
-                          </span>
+                          <span className="count-if-needed">{totalIfNeeded}</span>
                         )}
                         {totalUnavailable > 0 && (
-                          <span style={{ color: 'var(--gray-500)' }}>
-                            {totalUnavailable}
-                          </span>
+                          <span className="count-unavailable">{totalUnavailable}</span>
                         )}
                       </div>
                     )}
 
-                    {/* Tooltip */}
                     {showTooltip && (
                       <div className={`calendar-cell-tooltip ${showTooltip ? 'visible' : ''}`}>
                         <div className="tooltip-users">
