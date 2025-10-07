@@ -175,6 +175,13 @@ function EventView({ event, onBack }: EventViewProps) {
     );
   };
 
+  const getUserStatusForCell = (cellId: string, user: string): AvailabilityStatus | null => {
+    const availability = availabilities.find(
+      a => a.timeSlotId === cellId && a.userName === user
+    );
+    return availability?.status || null;
+  };
+
   const handleMouseDown = (date: string, hour: number, minute: number) => {
     if (!userName || !isEditMode) {
       return;
@@ -493,6 +500,7 @@ function EventView({ event, onBack }: EventViewProps) {
                 const usersInCell = getUsersForCell(date, hour, minute);
 
                 const isHoveredUserCell = hoveredUser && isUserAvailableForCell(cellId, hoveredUser);
+                const hoveredUserStatus = hoveredUser ? getUserStatusForCell(cellId, hoveredUser) : null;
 
                 // Count users by status
                 const availableCount = usersInCell.filter(a => a.status === 'available').length;
@@ -578,12 +586,33 @@ function EventView({ event, onBack }: EventViewProps) {
                     onMouseLeave={handleCellLeave}
                     className={`calendar-cell ${!isValid || isLocked ? 'calendar-cell-unavailable' : ''} ${isHoveredUserCell ? 'calendar-cell-user-highlighted' : ''}`}
                     style={{
-                      backgroundColor,
-                      border: cellStatus ? `2px solid ${borderColor}` : '1px solid var(--gray-200)',
+                      backgroundColor: isHoveredUserCell && hoveredUserStatus
+                        ? hoveredUserStatus === 'available'
+                          ? 'rgba(34, 197, 94, 0.6)'
+                          : hoveredUserStatus === 'if-needed'
+                            ? 'rgba(234, 179, 8, 0.6)'
+                            : 'rgba(107, 114, 128, 0.6)'
+                        : backgroundColor,
+                      border: isHoveredUserCell && hoveredUserStatus
+                        ? hoveredUserStatus === 'available'
+                          ? '2px solid var(--green-500)'
+                          : hoveredUserStatus === 'if-needed'
+                            ? '2px solid #eab308'
+                            : '2px solid var(--gray-500)'
+                        : cellStatus
+                          ? `2px solid ${borderColor}`
+                          : '1px solid var(--gray-200)',
                       cursor: isLocked ? 'not-allowed' : (isValid ? 'pointer' : 'not-allowed'),
                       opacity: isLocked && !cellStatus ? 0.6 : 1,
                       position: 'relative',
-                      minHeight: '35px'
+                      minHeight: '35px',
+                      boxShadow: isHoveredUserCell && hoveredUserStatus
+                        ? hoveredUserStatus === 'available'
+                          ? '0 0 0 2px rgba(34, 197, 94, 0.3)'
+                          : hoveredUserStatus === 'if-needed'
+                            ? '0 0 0 2px rgba(234, 179, 8, 0.3)'
+                            : '0 0 0 2px rgba(107, 114, 128, 0.3)'
+                        : 'none'
                     }}
                   >
                     {/* Show counts */}
