@@ -565,31 +565,95 @@ function EventView({ event, onBack }: EventViewProps) {
                     {showTooltip && (
                       <div className={`calendar-cell-tooltip ${showTooltip ? 'visible' : ''}`}>
                         <div className="tooltip-users">
-                          {cellStatus && (
-                            <div className="tooltip-user">
-                              <div className="tooltip-user-dot" style={{
-                                backgroundColor: cellStatus === 'available' ? 'var(--green-500)' :
-                                  cellStatus === 'if-needed' ? '#eab308' : 'var(--gray-500)'
-                              }}></div>
-                              <span>
-                                You ({cellStatus === 'available' ? '🟢 Available' :
-                                  cellStatus === 'if-needed' ? '🟡 If Needed' : '⚫ Unavailable'})
-                                {hasExistingData && !isEditMode ? '' : isEditMode ? ' (editing)' : ' (not saved)'}
-                              </span>
+                          {/* Available Section */}
+                          {(cellStatus === 'available' || usersInCell.some(a => a.status === 'available')) && (
+                            <div className="tooltip-section">
+                              <div className="tooltip-section-header">
+                                <span className="status-emoji">🟢</span>
+                                <span className="tooltip-section-title">Available</span>
+                              </div>
+                              <div className="tooltip-user-list">
+                                {cellStatus === 'available' && (
+                                  <div className="tooltip-user">
+                                    <div className="tooltip-user-dot"></div>
+                                    <span className="tooltip-username">
+                                      You{hasExistingData && !isEditMode ? '' : isEditMode ? ' (editing)' : ' (not saved)'}
+                                    </span>
+                                  </div>
+                                )}
+                                {usersInCell
+                                  .filter(a => a.status === 'available')
+                                  .map(avail => (
+                                    <div key={avail.userName} className="tooltip-user">
+                                      <div className="tooltip-user-dot"></div>
+                                      <span className="tooltip-username">
+                                        {avail.userName}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
                             </div>
                           )}
-                          {usersInCell.map(avail => (
-                            <div key={avail.userName} className="tooltip-user">
-                              <div className="tooltip-user-dot" style={{
-                                backgroundColor: avail.status === 'available' ? 'var(--green-500)' :
-                                  avail.status === 'if-needed' ? '#eab308' : 'var(--gray-500)'
-                              }}></div>
-                              <span>
-                                {avail.userName} ({avail.status === 'available' ? '🟢' :
-                                  avail.status === 'if-needed' ? '🟡' : '⚫'})
-                              </span>
+
+                          {/* If Needed Section */}
+                          {(cellStatus === 'if-needed' || usersInCell.some(a => a.status === 'if-needed')) && (
+                            <div className="tooltip-section">
+                              <div className="tooltip-section-header">
+                                <span className="status-emoji">🟡</span>
+                                <span className="tooltip-section-title">If Needed</span>
+                              </div>
+                              <div className="tooltip-user-list">
+                                {cellStatus === 'if-needed' && (
+                                  <div className="tooltip-user">
+                                    <div className="tooltip-user-dot"></div>
+                                    <span className="tooltip-username">
+                                      You{hasExistingData && !isEditMode ? '' : isEditMode ? ' (editing)' : ' (not saved)'}
+                                    </span>
+                                  </div>
+                                )}
+                                {usersInCell
+                                  .filter(a => a.status === 'if-needed')
+                                  .map(avail => (
+                                    <div key={avail.userName} className="tooltip-user">
+                                      <div className="tooltip-user-dot"></div>
+                                      <span className="tooltip-username">
+                                        {avail.userName}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
                             </div>
-                          ))}
+                          )}
+
+                          {/* Unavailable Section */}
+                          {(cellStatus === 'unavailable' || usersInCell.some(a => a.status === 'unavailable')) && (
+                            <div className="tooltip-section">
+                              <div className="tooltip-section-header">
+                                <span className="status-emoji">⚫</span>
+                                <span className="tooltip-section-title">Unavailable</span>
+                              </div>
+                              <div className="tooltip-user-list">
+                                {cellStatus === 'unavailable' && (
+                                  <div className="tooltip-user">
+                                    <div className="tooltip-user-dot"></div>
+                                    <span className="tooltip-username">
+                                      You{hasExistingData && !isEditMode ? '' : isEditMode ? ' (editing)' : ' (not saved)'}
+                                    </span>
+                                  </div>
+                                )}
+                                {usersInCell
+                                  .filter(a => a.status === 'unavailable')
+                                  .map(avail => (
+                                    <div key={avail.userName} className="tooltip-user">
+                                      <div className="tooltip-user-dot"></div>
+                                      <span className="tooltip-username">
+                                        {avail.userName}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
