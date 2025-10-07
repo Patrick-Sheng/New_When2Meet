@@ -510,49 +510,58 @@ function EventView({ event, onBack }: EventViewProps) {
 
                 // Calculate background color based on status
                 let backgroundColor = 'white';
-                if (cellStatus && isEditMode) {
-                  switch (cellStatus) {
-                    case 'available':
-                      backgroundColor = 'rgba(34, 197, 94, 0.4)';
-                      break;
-                    case 'if-needed':
-                      backgroundColor = 'rgba(234, 179, 8, 0.4)';
-                      break;
-                    case 'unavailable':
-                      backgroundColor = 'rgba(107, 114, 128, 0.4)';
-                      break;
-                  }
-                } else if (cellStatus && !isEditMode) {
-                  // Show saved status
-                  switch (cellStatus) {
-                    case 'available':
-                      backgroundColor = 'rgba(34, 197, 94, 0.3)';
-                      break;
-                    case 'if-needed':
-                      backgroundColor = 'rgba(234, 179, 8, 0.3)';
-                      break;
-                    case 'unavailable':
-                      backgroundColor = 'rgba(107, 114, 128, 0.3)';
-                      break;
-                  }
-                } else if (availableCount > 0) {
-                  // Show other users' availability (green dominant)
-                  const intensity = Math.min(availableCount / (users.length || 1), 1);
-                  backgroundColor = `rgba(34, 197, 94, ${0.1 + intensity * 0.2})`;
-                }
-
                 let borderColor = 'var(--gray-200)';
+
                 if (cellStatus) {
-                  switch (cellStatus) {
-                    case 'available':
-                      borderColor = 'var(--green-500)';
-                      break;
-                    case 'if-needed':
-                      borderColor = '#eab308';
-                      break;
-                    case 'unavailable':
-                      borderColor = 'var(--gray-500)';
-                      break;
+                  // Current user has a status for this cell
+                  if (isEditMode) {
+                    // Editing mode - brighter colors
+                    switch (cellStatus) {
+                      case 'available':
+                        backgroundColor = 'rgba(34, 197, 94, 0.4)';
+                        borderColor = 'var(--green-500)';
+                        break;
+                      case 'if-needed':
+                        backgroundColor = 'rgba(234, 179, 8, 0.4)';
+                        borderColor = '#eab308';
+                        break;
+                      case 'unavailable':
+                        backgroundColor = 'rgba(107, 114, 128, 0.4)';
+                        borderColor = 'var(--gray-500)';
+                        break;
+                    }
+                  } else {
+                    // View mode - show saved status
+                    switch (cellStatus) {
+                      case 'available':
+                        backgroundColor = 'rgba(34, 197, 94, 0.3)';
+                        borderColor = 'var(--green-500)';
+                        break;
+                      case 'if-needed':
+                        backgroundColor = 'rgba(234, 179, 8, 0.3)';
+                        borderColor = '#eab308';
+                        break;
+                      case 'unavailable':
+                        backgroundColor = 'rgba(107, 114, 128, 0.3)';
+                        borderColor = 'var(--gray-500)';
+                        break;
+                    }
+                  }
+                } else if (availableCount > 0 || ifNeededCount > 0 || unavailableCount > 0) {
+                  // No current user status, but show other users' availability
+                  // Prioritize showing the most common status
+                  if (availableCount >= ifNeededCount && availableCount >= unavailableCount) {
+                    // Green dominant
+                    const intensity = Math.min(availableCount / (users.length || 1), 1);
+                    backgroundColor = `rgba(34, 197, 94, ${0.1 + intensity * 0.2})`;
+                  } else if (ifNeededCount > availableCount && ifNeededCount >= unavailableCount) {
+                    // Yellow dominant
+                    const intensity = Math.min(ifNeededCount / (users.length || 1), 1);
+                    backgroundColor = `rgba(234, 179, 8, ${0.1 + intensity * 0.2})`;
+                  } else if (unavailableCount > 0) {
+                    // Grey dominant
+                    const intensity = Math.min(unavailableCount / (users.length || 1), 1);
+                    backgroundColor = `rgba(107, 114, 128, ${0.1 + intensity * 0.2})`;
                   }
                 }
 
