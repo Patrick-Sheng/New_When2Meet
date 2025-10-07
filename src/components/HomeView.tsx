@@ -74,6 +74,18 @@ function HomeView({ recentEvents, onCreateClick, onEventSelect }: HomeViewProps)
                   </div>
                 </button>
               ))}
+
+              <button
+                onClick={() => {
+                  if (confirm('Are you sure you want to clear all recent events?')) {
+                    localStorage.removeItem('comit_user_events');
+                    window.location.reload(); // simplest way to refresh the list
+                  }
+                }}
+                className="btn btn-danger w-full mt-4"
+              >
+                🗑️ Clear All Recent Events
+              </button>
             </div>
           </div>
         )}
