@@ -36,11 +36,6 @@ body {
   color: var(--gray-900);
 }
 
-/* App Container */
-.app-container {
-  min-height: 100vh;
-}
-
 /* Header Styles */
 .app-header {
   background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-purple) 100%);
@@ -1198,4 +1193,137 @@ body {
   white-space: normal;
   max-width: 200px;
   min-width: 120px;
+}
+
+/* Footer Styles */
+
+/* Footer Styles - Add to the end of your index.css */
+
+/* Make the app container a flex container */
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Allow main content to grow and push footer down */
+.app-main {
+  flex: 1;
+}
+
+.app-footer {
+  background: linear-gradient(135deg, var(--gray-800) 0%, var(--gray-900) 100%);
+  color: white;
+  margin-top: 4rem;
+  border-top: 1px solid var(--gray-700);
+}
+
+.app-footer-content {
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 3rem 1rem 2rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+}
+
+.footer-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.footer-sponsors {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.footer-sponsor-text {
+  color: var(--gray-300);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.footer-brand {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-purple) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.footer-tagline {
+  color: var(--gray-300);
+  font-size: 0.875rem;
+}
+
+.footer-heading {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: white;
+}
+
+.footer-links {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.footer-link {
+  color: var(--gray-300);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.2s ease;
+}
+
+.footer-link:hover {
+  color: var(--primary-blue);
+  text-decoration: underline;
+}
+
+.footer-link-highlight {
+  color: rgb(0, 165, 211);
+}
+
+.footer-bottom {
+  border-top: 1px solid var(--gray-700);
+  padding: 1.5rem 1rem;
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.footer-sponsored {
+  text-align: center;
+  color: var(--gray-300);
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.footer-copyright {
+  text-align: center;
+  color: var(--gray-400);
+  font-size: 0.875rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .app-footer-content {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    padding: 2rem 1rem 1.5rem;
+  }
+
+  .footer-section {
+    text-align: center;
+  }
+
+  .footer-links {
+    align-items: center;
+  }
 }

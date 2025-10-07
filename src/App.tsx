@@ -5,6 +5,7 @@ import EventView from './components/EventView';
 import type { Event } from './types';
 import { eventApi } from './supabaseClient';
 import { eventStorage, type StoredEvent } from './utils/eventStorage';
+import Footer from './components/Footer';
 
 function App() {
   const [view, setView] = useState('home');
@@ -132,7 +133,8 @@ function App() {
           <EventView event={currentEvent} onBack={handleBackToHome} />
         )}
       </main>
-    </div>
+      <Footer />
+    </div >
   );
 }
 

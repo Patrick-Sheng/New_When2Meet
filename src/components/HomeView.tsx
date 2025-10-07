@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import type { StoredEvent } from '../utils/eventStorage';
 
 interface HomeViewProps {
@@ -7,14 +7,19 @@ interface HomeViewProps {
   onEventSelect: (event: StoredEvent) => void;
 }
 
-function HomeView({ recentEvents, onCreateClick, onEventSelect }: HomeViewProps) {
+function HomeView({ recentEvents = [], onCreateClick, onEventSelect }: HomeViewProps) {
   const [eventId, setEventId] = useState('');
 
   const handleJoinEvent = () => {
-    // When joining by ID, we need to create a minimal StoredEvent
-    // The actual event data will be loaded by App.tsx
     if (eventId.trim()) {
-      onEventSelect({ id: eventId.trim(), title: '', lastVisited: '' });
+      // When joining by ID, we need to create a minimal StoredEvent
+      // The actual event data will be loaded by App.tsx
+      const tempEvent: StoredEvent = {
+        id: eventId.trim(),
+        title: 'Loading...',
+        lastVisited: new Date().toISOString()
+      };
+      onEventSelect(tempEvent);
     } else {
       alert('Please enter an event ID');
     }
@@ -55,7 +60,7 @@ function HomeView({ recentEvents, onCreateClick, onEventSelect }: HomeViewProps)
 
         {recentEvents.length > 0 && (
           <div className="recent-events">
-            <h3 className="recent-events-title">Your Recent Events</h3>
+            <h3 className="recent-events-title">Recent Events</h3>
             <div className="space-y-3">
               {recentEvents.map(event => (
                 <button
@@ -65,27 +70,10 @@ function HomeView({ recentEvents, onCreateClick, onEventSelect }: HomeViewProps)
                 >
                   <div className="event-item-title">{event.title}</div>
                   <div className="event-item-id">
-                    Last visited: {new Date(event.lastVisited).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    ID: {event.id.substring(0, 8)}...
                   </div>
                 </button>
               ))}
-
-              <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to clear all recent events?')) {
-                    localStorage.removeItem('comit_user_events');
-                    window.location.reload(); // simplest way to refresh the list
-                  }
-                }}
-                className="btn btn-danger w-full mt-4"
-              >
-                🗑️ Clear All Recent Events
-              </button>
             </div>
           </div>
         )}
