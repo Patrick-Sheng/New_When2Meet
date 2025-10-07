@@ -878,7 +878,7 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: var(--green-500);
+  background-color: white;
 }
 
 /* Calendar cell needs relative positioning for tooltip */
@@ -1019,6 +1019,8 @@ body {
   }
 }
 
+/* Add these styles to your index.css at the end */
+
 /* Status Selection Buttons */
 .status-selector-container {
   margin-top: 1rem;
@@ -1151,4 +1153,49 @@ body {
   .calendar-cell-counts {
     font-size: 0.6rem;
   }
+}
+
+/* Add these styles to src/index.css after the existing tooltip styles */
+
+/* Tooltip Sections for Multi-Status Display */
+.tooltip-section {
+  margin-bottom: 8px;
+}
+
+.tooltip-section:last-child {
+  margin-bottom: 0;
+}
+
+.tooltip-section-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.tooltip-section-title {
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tooltip-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 4px;
+}
+
+.tooltip-username {
+  font-size: 0.75rem;
+}
+
+/* Override tooltip to allow for wider content with sections */
+.calendar-cell-tooltip {
+  white-space: normal;
+  max-width: 200px;
+  min-width: 120px;
 }
