@@ -1,21 +1,22 @@
-import { useState } from 'react';
-import type { Event } from '../types';
+import React, { useState } from 'react';
+import type { StoredEvent } from '../utils/eventStorage';
 
 interface HomeViewProps {
-  events: Event[];
+  recentEvents: StoredEvent[];
   onCreateClick: () => void;
-  onEventSelect: (event: Event) => void;
+  onEventSelect: (event: StoredEvent) => void;
 }
 
-function HomeView({ events, onCreateClick, onEventSelect }: HomeViewProps) {
+function HomeView({ recentEvents, onCreateClick, onEventSelect }: HomeViewProps) {
   const [eventId, setEventId] = useState('');
 
   const handleJoinEvent = () => {
-    const event = events.find(e => e.id === eventId);
-    if (event) {
-      onEventSelect(event);
+    // When joining by ID, we need to create a minimal StoredEvent
+    // The actual event data will be loaded by App.tsx
+    if (eventId.trim()) {
+      onEventSelect({ id: eventId.trim(), title: '', lastVisited: '' });
     } else {
-      alert('Event not found!');
+      alert('Please enter an event ID');
     }
   };
 
@@ -52,18 +53,25 @@ function HomeView({ events, onCreateClick, onEventSelect }: HomeViewProps) {
           </button>
         </div>
 
-        {events.length > 0 && (
+        {recentEvents.length > 0 && (
           <div className="recent-events">
-            <h3 className="recent-events-title">Recent Events</h3>
+            <h3 className="recent-events-title">Your Recent Events</h3>
             <div className="space-y-3">
-              {events.map(event => (
+              {recentEvents.map(event => (
                 <button
                   key={event.id}
                   onClick={() => onEventSelect(event)}
                   className="event-item w-full"
                 >
                   <div className="event-item-title">{event.title}</div>
-                  <div className="event-item-id">ID: {event.id}</div>
+                  <div className="event-item-id">
+                    Last visited: {new Date(event.lastVisited).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
                 </button>
               ))}
             </div>
