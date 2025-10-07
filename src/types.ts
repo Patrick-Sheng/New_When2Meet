@@ -12,7 +12,10 @@ export type Event = {
   timeSlots: TimeSlot[];
 };
 
+export type AvailabilityStatus = 'available' | 'if-needed' | 'unavailable';
+
 export type Availability = {
   userName: string;
   timeSlotId: string;
+  status: AvailabilityStatus; // New field for availability status
 };

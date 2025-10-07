@@ -29,7 +29,6 @@ export type DbAvailability = {
 };
 
 export const eventApi = {
-  // Create a new event with time slots (one per day, not per 15-min interval)
   async createEvent(
     title: string,
     description: string,
@@ -37,7 +36,6 @@ export const eventApi = {
   ) {
     console.log('Creating event with:', { title, timeSlots });
 
-    // Insert event
     const { data: event, error: eventError } = await supabase
       .from('events')
       .insert({
@@ -54,14 +52,10 @@ export const eventApi = {
 
     console.log('Event created:', event);
 
-    // Create ONE time slot per day (not per 15-min interval)
     const timeSlotsData: Array<{ event_id: string; start_time: string; end_time: string }> = [];
 
     for (const slot of timeSlots) {
-      // Parse date in local timezone
       const [year, month, day] = slot.date.split('-').map(Number);
-
-      // Create date in local timezone
       const startDate = new Date(year, month - 1, day, slot.startHour, 0, 0, 0);
       const endDate = new Date(year, month - 1, day, slot.endHour, 0, 0, 0);
 
@@ -89,7 +83,6 @@ export const eventApi = {
     return { event, timeSlots: slots };
   },
 
-  // Get event with time slots
   async getEvent(eventId: string) {
     const { data: event, error: eventError } = await supabase
       .from('events')
@@ -110,7 +103,6 @@ export const eventApi = {
     return { event, timeSlots };
   },
 
-  // Get all events (recent)
   async getAllEvents(limit = 10) {
     const { data, error } = await supabase
       .from('events')
@@ -127,10 +119,14 @@ export const eventApi = {
 };
 
 export const availabilityApi = {
-  // Save user availability
-  // cellIds are in format: "YYYY-MM-DD-HH-MM" representing 15-min time slots
-  async saveAvailability(eventId: string, userName: string, cellIds: string[]) {
-    console.log('saveAvailability called with:', { eventId, userName, cellIds });
+  // Save user availability with status
+  // cellIds are objects with cell ID and status: { cellId: string, status: 'available' | 'if-needed' | 'unavailable' }
+  async saveAvailability(
+    eventId: string,
+    userName: string,
+    cellData: Array<{ cellId: string; status: string }>
+  ) {
+    console.log('saveAvailability called with:', { eventId, userName, cellData });
 
     // First, delete existing availability for this user and event
     const { error: deleteError } = await supabase
@@ -157,13 +153,12 @@ export const availabilityApi = {
 
     console.log('Found time slots:', timeSlots?.length);
 
-    // Just store all selected cell IDs as a single JSON array
-    // This way we don't need multiple records per user
+    // Store all selected cells with their status as JSON
     const availabilityData = {
       event_id: eventId,
-      time_slot_id: timeSlots?.[0]?.id || '', // Use first slot as reference
+      time_slot_id: timeSlots?.[0]?.id || '',
       user_name: userName,
-      selected_cells: cellIds // Store entire array of selected cells
+      selected_cells: cellData // Store array of { cellId, status }
     };
 
     console.log('Availability data to insert:', availabilityData);
@@ -182,7 +177,6 @@ export const availabilityApi = {
     return data;
   },
 
-  // Get all availability for an event
   async getEventAvailability(eventId: string) {
     const { data, error } = await supabase
       .from('availabilities')
@@ -196,7 +190,6 @@ export const availabilityApi = {
     return data;
   },
 
-  // Get users who marked a specific time slot as available
   async getUsersForTimeSlot(timeSlotId: string) {
     const { data, error } = await supabase
       .from('availabilities')
