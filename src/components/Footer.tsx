@@ -24,7 +24,7 @@ function Footer() {
           <h4 className="footer-heading">Feedback</h4>
           <ul className="footer-links">
             <li>
-              <a href="#" className="footer-link footer-link-highlight">
+              <a href="mailto:sheng.patrick@gmail.com" className="footer-link footer-link-highlight">
                 Report bugs or suggestions
               </a>
             </li>
