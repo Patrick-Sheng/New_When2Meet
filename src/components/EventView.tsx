@@ -21,6 +21,20 @@ function EventView({ event, onBack }: EventViewProps) {
   const [isEditingExisting, setIsEditingExisting] = useState(false);
   const [hasExistingData, setHasExistingData] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [meetingDuration, setMeetingDuration] = useState(60); // Duration in minutes
+  const [bestTimes, setBestTimes] = useState<Array<{
+    date: string;
+    startHour: number;
+    startMinute: number;
+    score: number;
+    availableUsers: string[];
+    ifNeededUsers: string[];
+  }>>([]);
+  const [hoveredBestTime, setHoveredBestTime] = useState<{
+    date: string;
+    startHour: number;
+    startMinute: number;
+  } | null>(null);
   const draggedCellsRef = useRef(new Set<string>());
 
   useEffect(() => {
@@ -278,6 +292,206 @@ function EventView({ event, onBack }: EventViewProps) {
     setIsEditMode(true);
   };
 
+  const findBestMeetingTimes = () => {
+    if (users.length === 0) {
+      setBestTimes([]);
+      return;
+    }
+
+    const slotsNeeded = Math.ceil(meetingDuration / 15); // Number of 15-min slots needed
+    const timeSlotScores: Array<{
+      date: string;
+      startHour: number;
+      startMinute: number;
+      score: number;
+      availableUsers: string[];
+      ifNeededUsers: string[];
+      unavailableUsers: string[];
+    }> = [];
+
+    // Check each possible starting time
+    for (const date of dates) {
+      for (const { hour, minute } of timeSlots) {
+        // Check if we have enough consecutive slots for the meeting duration
+        let allSlotsValid = true;
+        const slotIds: string[] = [];
+
+        for (let i = 0; i < slotsNeeded; i++) {
+          const slotMinute = minute + (i * 15);
+          const slotHour = hour + Math.floor(slotMinute / 60);
+          const adjustedMinute = slotMinute % 60;
+
+          const cellId = getCellId(date, slotHour, adjustedMinute);
+          if (!validCells.has(cellId)) {
+            allSlotsValid = false;
+            break;
+          }
+          slotIds.push(cellId);
+        }
+
+        if (!allSlotsValid) continue;
+
+        // Calculate score for this time slot
+        let availableCount = 0;
+        let ifNeededCount = 0;
+        let unavailableCount = 0;
+        const availableUsers = new Set<string>();
+        const ifNeededUsers = new Set<string>();
+        const unavailableUsers = new Set<string>();
+
+        // Check each user's availability across all slots needed
+        for (const user of users) {
+          let userAvailable = true;
+          let userIfNeeded = false;
+          let userUnavailable = false;
+
+          for (const slotId of slotIds) {
+            const userStatus = availabilities.find(
+              a => a.userName === user && a.timeSlotId === slotId
+            )?.status;
+
+            if (userStatus === 'unavailable') {
+              userUnavailable = true;
+              userAvailable = false;
+              userIfNeeded = false;
+              break;
+            } else if (userStatus === 'if-needed') {
+              userIfNeeded = true;
+              userAvailable = false;
+            } else if (!userStatus) {
+              // No response from this user
+              userAvailable = false;
+            }
+          }
+
+          if (userUnavailable) {
+            unavailableUsers.add(user);
+            unavailableCount++;
+          } else if (userIfNeeded) {
+            ifNeededUsers.add(user);
+            ifNeededCount++;
+          } else if (userAvailable) {
+            availableUsers.add(user);
+            availableCount++;
+          }
+        }
+
+        // Skip times where everyone is unavailable or no one is available
+        if (unavailableCount === users.length || (availableCount === 0 && ifNeededCount === 0)) {
+          continue;
+        }
+
+        // Calculate score: prioritize available users, then if-needed users
+        // Score: available users * 10 + if-needed users * 5 - unavailable users * 20
+        const score = (availableCount * 10) + (ifNeededCount * 5) - (unavailableCount * 20);
+
+        timeSlotScores.push({
+          date,
+          startHour: hour,
+          startMinute: minute,
+          score,
+          availableUsers: Array.from(availableUsers),
+          ifNeededUsers: Array.from(ifNeededUsers),
+          unavailableUsers: Array.from(unavailableUsers)
+        });
+      }
+    }
+
+    // Sort by score (highest first) and take top 5
+    const topTimes = timeSlotScores
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    setBestTimes(topTimes);
+  };
+
+  const formatTime = (hour: number, minute: number) => {
+    const h = hour.toString().padStart(2, '0');
+    const m = minute.toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
+  const formatTimeRange = (startHour: number, startMinute: number, duration: number) => {
+    const endMinutes = startMinute + duration;
+    const endHour = startHour + Math.floor(endMinutes / 60);
+    const endMinute = endMinutes % 60;
+
+    return `${formatTime(startHour, startMinute)} - ${formatTime(endHour, endMinute)}`;
+  };
+
+  const isCellInBestTime = (date: string, hour: number, minute: number) => {
+    if (!hoveredBestTime) return false;
+
+    if (date !== hoveredBestTime.date) return false;
+
+    const slotsNeeded = Math.ceil(meetingDuration / 15);
+
+    for (let i = 0; i < slotsNeeded; i++) {
+      const slotMinute = hoveredBestTime.startMinute + (i * 15);
+      const slotHour = hoveredBestTime.startHour + Math.floor(slotMinute / 60);
+      const adjustedMinute = slotMinute % 60;
+
+      if (hour === slotHour && minute === adjustedMinute) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const isFirstCellInBestTime = (date: string, hour: number, minute: number) => {
+    if (!hoveredBestTime) return false;
+    return date === hoveredBestTime.date &&
+      hour === hoveredBestTime.startHour &&
+      minute === hoveredBestTime.startMinute;
+  };
+
+  const isLastCellInBestTime = (date: string, hour: number, minute: number) => {
+    if (!hoveredBestTime) return false;
+
+    const slotsNeeded = Math.ceil(meetingDuration / 15);
+    const lastSlotMinute = hoveredBestTime.startMinute + ((slotsNeeded - 1) * 15);
+    const lastSlotHour = hoveredBestTime.startHour + Math.floor(lastSlotMinute / 60);
+    const lastAdjustedMinute = lastSlotMinute % 60;
+
+    return date === hoveredBestTime.date &&
+      hour === lastSlotHour &&
+      minute === lastAdjustedMinute;
+  };
+
+  const isMiddleCellInBestTime = (date: string, hour: number, minute: number) => {
+    return isCellInBestTime(date, hour, minute) &&
+      !isFirstCellInBestTime(date, hour, minute) &&
+      !isLastCellInBestTime(date, hour, minute);
+  };
+
+  const getBestTimeUsersForCell = (date: string, hour: number, minute: number) => {
+    if (!hoveredBestTime || !isCellInBestTime(date, hour, minute)) {
+      return { available: [], ifNeeded: [], unavailable: [] };
+    }
+
+    const bestTime = bestTimes.find(
+      t => t.date === hoveredBestTime.date &&
+        t.startHour === hoveredBestTime.startHour &&
+        t.startMinute === hoveredBestTime.startMinute
+    );
+
+    if (!bestTime) {
+      return { available: [], ifNeeded: [], unavailable: [] };
+    }
+
+    const allUsers = new Set(users);
+    const unavailableUsers = Array.from(allUsers).filter(
+      user => !bestTime.availableUsers.includes(user) && !bestTime.ifNeededUsers.includes(user)
+    );
+
+    return {
+      available: bestTime.availableUsers,
+      ifNeeded: bestTime.ifNeededUsers,
+      unavailable: unavailableUsers
+    };
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -304,392 +518,537 @@ function EventView({ event, onBack }: EventViewProps) {
         ← Back to Home
       </button>
 
-      <div className="card mb-6">
-        <h2 className="event-view-title">{event.title}</h2>
-        {event.description && (
-          <p className="event-view-description">{event.description}</p>
-        )}
+      <div className="event-view-layout">
+        {/* Left Sidebar */}
+        <div className="event-view-sidebar">
+          {/* Event Info Card */}
+          <div className="card">
+            <h2 className="event-view-title">{event.title}</h2>
+            {event.description && (
+              <p className="event-view-description">{event.description}</p>
+            )}
 
-        <div className="share-box">
-          <p className="share-box-label">Share this event:</p>
-          <div className="share-input-group">
-            <input
-              type="text"
-              value={shareableLink}
-              readOnly
-              className="input share-input"
-            />
-            <button
-              onClick={() => navigator.clipboard.writeText(shareableLink)}
-              className="btn-copy"
-            >
-              Copy
-            </button>
+            <div className="share-box">
+              <p className="share-box-label">Share this event:</p>
+              <div className="share-input-group">
+                <input
+                  type="text"
+                  value={shareableLink}
+                  readOnly
+                  className="input share-input"
+                />
+                <button
+                  onClick={() => navigator.clipboard.writeText(shareableLink)}
+                  className="btn-copy"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {!userName && (
-        <div className="calendar-instructions" style={{
-          background: '#fef3c7',
-          borderColor: '#fbbf24',
-          color: '#92400e',
-          marginBottom: '1.5rem'
-        }}>
-          ⚠️ Please enter your name below to select your availability
-        </div>
-      )}
+          {/* Warning if no name */}
+          {!userName && (
+            <div className="calendar-instructions" style={{
+              background: '#fef3c7',
+              borderColor: '#fbbf24',
+              color: '#92400e'
+            }}>
+              ⚠️ Please enter your name below to select your availability
+            </div>
+          )}
 
-      <div className="card mb-6">
-        <label className="form-label">Your Name</label>
-        <div className="user-input-group">
-          <input
-            type="text"
-            value={userName}
-            onChange={(e) => setUserName(e.target.value)}
-            placeholder="Enter your name"
-            className="input user-input-flex"
-            disabled={isSaving}
-          />
-          {hasExistingData && !isEditMode ? (
-            <button
-              onClick={handleEditClick}
-              className="btn btn-secondary btn-nowrap"
-            >
-              Edit Availability
-            </button>
-          ) : (
-            <button
-              onClick={handleSave}
-              disabled={!userName || selectedCells.size === 0 || isSaving}
-              className="btn btn-save btn-nowrap"
-              style={{
-                opacity: !userName || selectedCells.size === 0 || isSaving ? 0.5 : 1,
-                cursor: !userName || selectedCells.size === 0 || isSaving ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {isSaving ? 'Saving...' : isEditingExisting ? 'Update Availability' : 'Save Availability'}
-            </button>
+          {/* User Input Card */}
+          <div className="card">
+            <label className="form-label">Your Name</label>
+            <div className="user-input-group">
+              <input
+                type="text"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                placeholder="Enter your name"
+                className="input user-input-flex"
+                disabled={isSaving}
+              />
+              {hasExistingData && !isEditMode ? (
+                <button
+                  onClick={handleEditClick}
+                  className="btn btn-secondary btn-nowrap"
+                >
+                  Edit Availability
+                </button>
+              ) : (
+                <button
+                  onClick={handleSave}
+                  disabled={!userName || selectedCells.size === 0 || isSaving}
+                  className="btn btn-save btn-nowrap"
+                  style={{
+                    opacity: !userName || selectedCells.size === 0 || isSaving ? 0.5 : 1,
+                    cursor: !userName || selectedCells.size === 0 || isSaving ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isSaving ? 'Saving...' : isEditingExisting ? 'Update Availability' : 'Save Availability'}
+                </button>
+              )}
+            </div>
+
+            {userName && isEditMode && (
+              <div className="status-selector-container">
+                <label className="form-label">Select status to paint:</label>
+                <div className="status-selector-buttons">
+                  <button
+                    onClick={() => setCurrentStatus('available')}
+                    className={`status-btn status-btn-available ${currentStatus === 'available' ? 'status-btn-active' : ''}`}
+                  >
+                    <span className="status-emoji">🟢</span>
+                    Available
+                  </button>
+                  <button
+                    onClick={() => setCurrentStatus('if-needed')}
+                    className={`status-btn status-btn-if-needed ${currentStatus === 'if-needed' ? 'status-btn-active' : ''}`}
+                  >
+                    <span className="status-emoji">🟡</span>
+                    If Needed
+                  </button>
+                  <button
+                    onClick={() => setCurrentStatus('unavailable')}
+                    className={`status-btn status-btn-unavailable ${currentStatus === 'unavailable' ? 'status-btn-active' : ''}`}
+                  >
+                    <span className="status-emoji">⚫</span>
+                    Unavailable
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {hasExistingData && !isEditMode && (
+              <p style={{
+                marginTop: '0.75rem',
+                fontSize: '0.875rem',
+                color: 'var(--green-500)',
+                fontWeight: '500'
+              }}>
+                ✓ Your availability is saved
+              </p>
+            )}
+            {isEditMode && isEditingExisting && (
+              <p style={{
+                marginTop: '0.75rem',
+                fontSize: '0.875rem',
+                color: 'var(--primary-blue)',
+                fontWeight: '500'
+              }}>
+                ✏️ Editing mode - select a status and click cells to update
+              </p>
+            )}
+          </div>
+
+          {/* Participants Card */}
+          {users.length > 0 && (
+            <div className="card">
+              <h3 style={{ fontWeight: '600', marginBottom: '0.5rem' }}>
+                Participants ({users.length})
+              </h3>
+              <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.75rem' }}>
+                Hover to highlight their availability
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {users.map(user => (
+                  <span
+                    key={user}
+                    className={`tag participant-tag ${hoveredUser === user ? 'participant-tag-active' : ''}`}
+                    onMouseEnter={() => setHoveredUser(user)}
+                    onMouseLeave={() => setHoveredUser(null)}
+                  >
+                    {user}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Best Meeting Times */}
+          {users.length > 0 && (
+            <div className="card">
+              <h3 style={{ fontWeight: '600', marginBottom: '1rem' }}>
+                Find Best Meeting Time (Alpha)
+              </h3>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Meeting Duration</label>
+                <select
+                  value={meetingDuration}
+                  onChange={(e) => setMeetingDuration(Number(e.target.value))}
+                  className="input select"
+                >
+                  <option value={15}>15 minutes</option>
+                  <option value={30}>30 minutes</option>
+                  <option value={45}>45 minutes</option>
+                  <option value={60}>1 hour</option>
+                  <option value={120}>2 hours</option>
+                  <option value={180}>3 hours</option>
+                </select>
+              </div>
+
+              <button
+                onClick={findBestMeetingTimes}
+                className="btn btn-primary w-full"
+                style={{ marginBottom: '1rem' }}
+              >
+                🔍 Find Best Times
+              </button>
+
+              {bestTimes.length > 0 && (
+                <div className="best-times-list">
+                  <p style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.75rem', color: 'var(--gray-700)' }}>
+                    Top {bestTimes.length} suggested times:
+                  </p>
+                  {bestTimes.map((time, index) => (
+                    <div
+                      key={`${time.date}-${time.startHour}-${time.startMinute}`}
+                      className="best-time-item"
+                      onMouseEnter={() => setHoveredBestTime({
+                        date: time.date,
+                        startHour: time.startHour,
+                        startMinute: time.startMinute
+                      })}
+                      onMouseLeave={() => setHoveredBestTime(null)}
+                    >
+                      <div className="best-time-header">
+                        <span className="best-time-rank">#{index + 1}</span>
+                        <div className="best-time-info">
+                          <div className="best-time-date">
+                            {formatDate(time.date)}
+                          </div>
+                          <div className="best-time-time">
+                            {formatTimeRange(time.startHour, time.startMinute, meetingDuration)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="best-time-details">
+                        {time.availableUsers.length > 0 && (
+                          <div className="best-time-status">
+                            <span className="status-emoji">🟢</span>
+                            <span className="best-time-count">{time.availableUsers.length} available</span>
+                          </div>
+                        )}
+                        {time.ifNeededUsers.length > 0 && (
+                          <div className="best-time-status">
+                            <span className="status-emoji">🟡</span>
+                            <span className="best-time-count">{time.ifNeededUsers.length} if needed</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {bestTimes.length === 0 && users.length > 0 && (
+                <p style={{ fontSize: '0.875rem', color: 'var(--gray-600)', textAlign: 'center', padding: '1rem' }}>
+                  Click "Find Best Times" to see suggested meeting times
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Instructions */}
+          {userName && !isSaving && isEditMode && !isEditingExisting && (
+            <div className="calendar-instructions">
+              💡 Select a status above, then click and drag to mark your availability. Hover over cells to see who's available.
+            </div>
+          )}
+
+          {userName && !isSaving && isEditMode && isEditingExisting && (
+            <div className="calendar-instructions" style={{
+              background: '#dbeafe',
+              borderColor: '#3b82f6',
+              color: '#1e40af'
+            }}>
+              ✏️ You're editing your previous selections. Choose a status and click cells to update, then click "Update Availability" to save.
+            </div>
+          )}
+
+          {userName && hasExistingData && !isEditMode && (
+            <div className="calendar-instructions" style={{
+              background: '#f0fdf4',
+              borderColor: '#86efac',
+              color: '#166534'
+            }}>
+              ✓ Your availability is displayed. Click "Edit Availability" to make changes.
+            </div>
           )}
         </div>
 
-        {userName && isEditMode && (
-          <div className="status-selector-container">
-            <label className="form-label">Select status to paint:</label>
-            <div className="status-selector-buttons">
-              <button
-                onClick={() => setCurrentStatus('available')}
-                className={`status-btn status-btn-available ${currentStatus === 'available' ? 'status-btn-active' : ''}`}
-              >
-                <span className="status-emoji">🟢</span>
-                Available
-              </button>
-              <button
-                onClick={() => setCurrentStatus('if-needed')}
-                className={`status-btn status-btn-if-needed ${currentStatus === 'if-needed' ? 'status-btn-active' : ''}`}
-              >
-                <span className="status-emoji">🟡</span>
-                If Needed
-              </button>
-              <button
-                onClick={() => setCurrentStatus('unavailable')}
-                className={`status-btn status-btn-unavailable ${currentStatus === 'unavailable' ? 'status-btn-active' : ''}`}
-              >
-                <span className="status-emoji">⚫</span>
-                Unavailable
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Right Side - Calendar */}
+        <div className="event-view-calendar-container">
+          <div className="calendar-week-container">
+            <div className="calendar-week-grid" style={{
+              gridTemplateColumns: `80px repeat(${dates.length}, 1fr)`
+            }}>
+              <div style={{ background: 'var(--gray-100)' }}></div>
+              {dates.map(date => (
+                <div key={date} className="calendar-day-header">
+                  {formatDate(date)}
+                </div>
+              ))}
 
-        {hasExistingData && !isEditMode && (
-          <p style={{
-            marginTop: '0.75rem',
-            fontSize: '0.875rem',
-            color: 'var(--green-500)',
-            fontWeight: '500'
-          }}>
-            ✓ Your availability is saved
-          </p>
-        )}
-        {isEditMode && isEditingExisting && (
-          <p style={{
-            marginTop: '0.75rem',
-            fontSize: '0.875rem',
-            color: 'var(--primary-blue)',
-            fontWeight: '500'
-          }}>
-            ✏️ Editing mode - select a status and click cells to update
-          </p>
-        )}
-      </div>
-
-      {users.length > 0 && (
-        <div className="card mb-6">
-          <h3 style={{ fontWeight: '600', marginBottom: '1rem' }}>
-            Participants ({users.length}) - Hover to highlight their availability
-          </h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {users.map(user => (
-              <span
-                key={user}
-                className={`tag participant-tag ${hoveredUser === user ? 'participant-tag-active' : ''}`}
-                onMouseEnter={() => setHoveredUser(user)}
-                onMouseLeave={() => setHoveredUser(null)}
-              >
-                {user}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="calendar-week-container">
-        <div className="calendar-week-grid" style={{
-          gridTemplateColumns: `80px repeat(${dates.length}, 1fr)`
-        }}>
-          <div style={{ background: 'var(--gray-100)' }}></div>
-          {dates.map(date => (
-            <div key={date} className="calendar-day-header">
-              {formatDate(date)}
-            </div>
-          ))}
-
-          {timeSlots.map(({ hour, minute }) => (
-            <React.Fragment key={`${hour}-${minute}`}>
-              <div className="calendar-time-label">
-                {minute === 0 ? `${hour.toString().padStart(2, '0')}:00` : ''}
-              </div>
-              {dates.map(date => {
-                const cellId = getCellId(date, hour, minute);
-                const cellStatus = selectedCells.get(cellId);
-                const isValid = isValidCell(date, hour, minute);
-                const usersInCell = getUsersForCell(date, hour, minute);
-
-                const isHoveredUserCell = hoveredUser && isUserAvailableForCell(cellId, hoveredUser);
-                const hoveredUserStatus = hoveredUser ? getUserStatusForCell(cellId, hoveredUser) : null;
-
-                const availableCount = usersInCell.filter(a => a.status === 'available').length;
-                const ifNeededCount = usersInCell.filter(a => a.status === 'if-needed').length;
-                const unavailableCount = usersInCell.filter(a => a.status === 'unavailable').length;
-
-                const totalAvailable = isEditMode && cellStatus === 'available' ? availableCount + 1 : availableCount;
-                const totalIfNeeded = isEditMode && cellStatus === 'if-needed' ? ifNeededCount + 1 : ifNeededCount;
-                const totalUnavailable = isEditMode && cellStatus === 'unavailable' ? unavailableCount + 1 : unavailableCount;
-
-                const isLocked = !userName || isSaving || !isEditMode;
-                const isHovered = hoveredCell === cellId;
-                const showTooltip = isHovered && (usersInCell.length > 0 || cellStatus);
-
-                let backgroundColor = 'white';
-                let borderColor = 'var(--gray-200)';
-
-                if (cellStatus) {
-                  if (isEditMode) {
-                    switch (cellStatus) {
-                      case 'available':
-                        backgroundColor = 'rgba(34, 197, 94, 0.4)';
-                        borderColor = 'var(--green-500)';
-                        break;
-                      case 'if-needed':
-                        backgroundColor = 'rgba(234, 179, 8, 0.4)';
-                        borderColor = '#eab308';
-                        break;
-                      case 'unavailable':
-                        backgroundColor = 'rgba(107, 114, 128, 0.4)';
-                        borderColor = 'var(--gray-500)';
-                        break;
-                    }
-                  } else {
-                    switch (cellStatus) {
-                      case 'available':
-                        backgroundColor = 'rgba(34, 197, 94, 0.3)';
-                        borderColor = 'var(--green-500)';
-                        break;
-                      case 'if-needed':
-                        backgroundColor = 'rgba(234, 179, 8, 0.3)';
-                        borderColor = '#eab308';
-                        break;
-                      case 'unavailable':
-                        backgroundColor = 'rgba(107, 114, 128, 0.3)';
-                        borderColor = 'var(--gray-500)';
-                        break;
-                    }
-                  }
-                } else if (availableCount > 0 || ifNeededCount > 0 || unavailableCount > 0) {
-                  if (availableCount >= ifNeededCount && availableCount >= unavailableCount) {
-                    const intensity = Math.min(availableCount / (users.length || 1), 1);
-                    backgroundColor = `rgba(34, 197, 94, ${0.1 + intensity * 0.2})`;
-                  } else if (ifNeededCount > availableCount && ifNeededCount >= unavailableCount) {
-                    const intensity = Math.min(ifNeededCount / (users.length || 1), 1);
-                    backgroundColor = `rgba(234, 179, 8, ${0.1 + intensity * 0.2})`;
-                  } else if (unavailableCount > 0) {
-                    const intensity = Math.min(unavailableCount / (users.length || 1), 1);
-                    backgroundColor = `rgba(107, 114, 128, ${0.1 + intensity * 0.2})`;
-                  }
-                }
-
-                return (
-                  <div
-                    key={cellId}
-                    onMouseDown={() => !isLocked && handleMouseDown(date, hour, minute)}
-                    onMouseEnter={() => {
-                      if (!isLocked) {
-                        handleMouseEnter(date, hour, minute);
-                      }
-                      handleCellHover(date, hour, minute);
-                    }}
-                    onMouseLeave={handleCellLeave}
-                    className={`calendar-cell ${!isValid || isLocked ? 'calendar-cell-unavailable' : ''} ${isHoveredUserCell ? `calendar-cell-user-highlighted status-${hoveredUserStatus}` : ''}`}
-                    style={{
-                      backgroundColor: !isHoveredUserCell ? backgroundColor : undefined,
-                      border: !isHoveredUserCell ? (cellStatus ? `2px solid ${borderColor}` : '1px solid var(--gray-200)') : undefined,
-                      cursor: isLocked ? 'not-allowed' : (isValid ? 'pointer' : 'not-allowed'),
-                      opacity: isLocked && !cellStatus ? 0.6 : 1
-                    }}
-                  >
-                    {(totalAvailable > 0 || totalIfNeeded > 0 || totalUnavailable > 0) && (
-                      <div className="calendar-cell-counts">
-                        {totalAvailable > 0 && (
-                          <span className="count-available">{totalAvailable}</span>
-                        )}
-                        {totalIfNeeded > 0 && (
-                          <span className="count-if-needed">{totalIfNeeded}</span>
-                        )}
-                        {totalUnavailable > 0 && (
-                          <span className="count-unavailable">{totalUnavailable}</span>
-                        )}
-                      </div>
-                    )}
-
-                    {showTooltip && (
-                      <div className={`calendar-cell-tooltip ${showTooltip ? 'visible' : ''}`}>
-                        <div className="tooltip-users">
-                          {/* Available Section */}
-                          {(cellStatus === 'available' || usersInCell.some(a => a.status === 'available')) && (
-                            <div className="tooltip-section">
-                              <div className="tooltip-section-header">
-                                <span className="status-emoji">🟢</span>
-                                <span className="tooltip-section-title">Available</span>
-                              </div>
-                              <div className="tooltip-user-list">
-                                {cellStatus === 'available' && (
-                                  <div className="tooltip-user">
-                                    <div className="tooltip-user-dot"></div>
-                                    <span className="tooltip-username">
-                                      You{hasExistingData && !isEditMode ? '' : isEditMode ? ' (editing)' : ' (not saved)'}
-                                    </span>
-                                  </div>
-                                )}
-                                {usersInCell
-                                  .filter(a => a.status === 'available')
-                                  .map(avail => (
-                                    <div key={avail.userName} className="tooltip-user">
-                                      <div className="tooltip-user-dot"></div>
-                                      <span className="tooltip-username">
-                                        {avail.userName}
-                                      </span>
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* If Needed Section */}
-                          {(cellStatus === 'if-needed' || usersInCell.some(a => a.status === 'if-needed')) && (
-                            <div className="tooltip-section">
-                              <div className="tooltip-section-header">
-                                <span className="status-emoji">🟡</span>
-                                <span className="tooltip-section-title">If Needed</span>
-                              </div>
-                              <div className="tooltip-user-list">
-                                {cellStatus === 'if-needed' && (
-                                  <div className="tooltip-user">
-                                    <div className="tooltip-user-dot"></div>
-                                    <span className="tooltip-username">
-                                      You{hasExistingData && !isEditMode ? '' : isEditMode ? ' (editing)' : ' (not saved)'}
-                                    </span>
-                                  </div>
-                                )}
-                                {usersInCell
-                                  .filter(a => a.status === 'if-needed')
-                                  .map(avail => (
-                                    <div key={avail.userName} className="tooltip-user">
-                                      <div className="tooltip-user-dot"></div>
-                                      <span className="tooltip-username">
-                                        {avail.userName}
-                                      </span>
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Unavailable Section */}
-                          {(cellStatus === 'unavailable' || usersInCell.some(a => a.status === 'unavailable')) && (
-                            <div className="tooltip-section">
-                              <div className="tooltip-section-header">
-                                <span className="status-emoji">⚫</span>
-                                <span className="tooltip-section-title">Unavailable</span>
-                              </div>
-                              <div className="tooltip-user-list">
-                                {cellStatus === 'unavailable' && (
-                                  <div className="tooltip-user">
-                                    <div className="tooltip-user-dot"></div>
-                                    <span className="tooltip-username">
-                                      You{hasExistingData && !isEditMode ? '' : isEditMode ? ' (editing)' : ' (not saved)'}
-                                    </span>
-                                  </div>
-                                )}
-                                {usersInCell
-                                  .filter(a => a.status === 'unavailable')
-                                  .map(avail => (
-                                    <div key={avail.userName} className="tooltip-user">
-                                      <div className="tooltip-user-dot"></div>
-                                      <span className="tooltip-username">
-                                        {avail.userName}
-                                      </span>
-                                    </div>
-                                  ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
+              {timeSlots.map(({ hour, minute }) => (
+                <React.Fragment key={`${hour}-${minute}`}>
+                  <div className="calendar-time-label">
+                    {minute === 0 ? `${hour.toString().padStart(2, '0')}:00` : ''}
                   </div>
-                );
-              })}
-            </React.Fragment>
-          ))}
+                  {dates.map(date => {
+                    const cellId = getCellId(date, hour, minute);
+                    const cellStatus = selectedCells.get(cellId);
+                    const isValid = isValidCell(date, hour, minute);
+                    const usersInCell = getUsersForCell(date, hour, minute);
+
+                    const isHoveredUserCell = hoveredUser && isUserAvailableForCell(cellId, hoveredUser);
+                    const hoveredUserStatus = hoveredUser ? getUserStatusForCell(cellId, hoveredUser) : null;
+
+                    const isBestTimeCell = isCellInBestTime(date, hour, minute);
+                    const isFirstBestTimeCell = isFirstCellInBestTime(date, hour, minute);
+                    const isLastBestTimeCell = isLastCellInBestTime(date, hour, minute);
+                    const isMiddleBestTimeCell = isMiddleCellInBestTime(date, hour, minute);
+                    const bestTimeUsers = getBestTimeUsersForCell(date, hour, minute);
+
+                    const availableCount = usersInCell.filter(a => a.status === 'available').length;
+                    const ifNeededCount = usersInCell.filter(a => a.status === 'if-needed').length;
+                    const unavailableCount = usersInCell.filter(a => a.status === 'unavailable').length;
+
+                    const totalAvailable = isEditMode && cellStatus === 'available' ? availableCount + 1 : availableCount;
+                    const totalIfNeeded = isEditMode && cellStatus === 'if-needed' ? ifNeededCount + 1 : ifNeededCount;
+                    const totalUnavailable = isEditMode && cellStatus === 'unavailable' ? unavailableCount + 1 : unavailableCount;
+
+                    const isLocked = !userName || isSaving || !isEditMode;
+                    const isHovered = hoveredCell === cellId;
+                    const showTooltip = (isHovered && (usersInCell.length > 0 || cellStatus)) || isFirstBestTimeCell;
+
+                    let backgroundColor = 'white';
+                    let borderColor = 'var(--gray-200)';
+
+                    if (cellStatus) {
+                      if (isEditMode) {
+                        switch (cellStatus) {
+                          case 'available':
+                            backgroundColor = 'rgba(34, 197, 94, 0.4)';
+                            borderColor = 'var(--green-500)';
+                            break;
+                          case 'if-needed':
+                            backgroundColor = 'rgba(234, 179, 8, 0.4)';
+                            borderColor = '#eab308';
+                            break;
+                          case 'unavailable':
+                            backgroundColor = 'rgba(107, 114, 128, 0.4)';
+                            borderColor = 'var(--gray-500)';
+                            break;
+                        }
+                      } else {
+                        switch (cellStatus) {
+                          case 'available':
+                            backgroundColor = 'rgba(34, 197, 94, 0.3)';
+                            borderColor = 'var(--green-500)';
+                            break;
+                          case 'if-needed':
+                            backgroundColor = 'rgba(234, 179, 8, 0.3)';
+                            borderColor = '#eab308';
+                            break;
+                          case 'unavailable':
+                            backgroundColor = 'rgba(107, 114, 128, 0.3)';
+                            borderColor = 'var(--gray-500)';
+                            break;
+                        }
+                      }
+                    } else if (availableCount > 0 || ifNeededCount > 0 || unavailableCount > 0) {
+                      if (availableCount >= ifNeededCount && availableCount >= unavailableCount) {
+                        const intensity = Math.min(availableCount / (users.length || 1), 1);
+                        backgroundColor = `rgba(34, 197, 94, ${0.1 + intensity * 0.2})`;
+                      } else if (ifNeededCount > availableCount && ifNeededCount >= unavailableCount) {
+                        const intensity = Math.min(ifNeededCount / (users.length || 1), 1);
+                        backgroundColor = `rgba(234, 179, 8, ${0.1 + intensity * 0.2})`;
+                      } else if (unavailableCount > 0) {
+                        const intensity = Math.min(unavailableCount / (users.length || 1), 1);
+                        backgroundColor = `rgba(107, 114, 128, ${0.1 + intensity * 0.2})`;
+                      }
+                    }
+
+                    // Override styling if this is part of a hovered best time
+                    if (isBestTimeCell && !isHoveredUserCell) {
+                      backgroundColor = 'rgba(37, 99, 235, 0.2)';
+                    }
+
+                    // Custom border styling for best time range (vertical orientation)
+                    let customBorderStyle: React.CSSProperties = {};
+                    if (isBestTimeCell && !isHoveredUserCell) {
+                      if (isFirstBestTimeCell) {
+                        // Top cell: left, top, right borders
+                        customBorderStyle = {
+                          borderLeft: '3px solid var(--primary-blue)',
+                          borderTop: '3px solid var(--primary-blue)',
+                          borderRight: '3px solid var(--primary-blue)',
+                          borderBottom: '1px solid rgba(37, 99, 235, 0.3)',
+                        };
+                      } else if (isLastBestTimeCell) {
+                        // Bottom cell: left, bottom, right borders
+                        customBorderStyle = {
+                          borderLeft: '3px solid var(--primary-blue)',
+                          borderBottom: '3px solid var(--primary-blue)',
+                          borderRight: '3px solid var(--primary-blue)',
+                          borderTop: '1px solid rgba(37, 99, 235, 0.3)',
+                        };
+                      } else if (isMiddleBestTimeCell) {
+                        // Middle cells: left and right borders only
+                        customBorderStyle = {
+                          borderLeft: '3px solid var(--primary-blue)',
+                          borderRight: '3px solid var(--primary-blue)',
+                          borderTop: '1px solid rgba(37, 99, 235, 0.3)',
+                          borderBottom: '1px solid rgba(37, 99, 235, 0.3)',
+                        };
+                      }
+                    }
+
+                    return (
+                      <div
+                        key={cellId}
+                        onMouseDown={() => !isLocked && handleMouseDown(date, hour, minute)}
+                        onMouseEnter={() => {
+                          if (!isLocked) {
+                            handleMouseEnter(date, hour, minute);
+                          }
+                          if (!isBestTimeCell) {
+                            handleCellHover(date, hour, minute);
+                          }
+                        }}
+                        onMouseLeave={handleCellLeave}
+                        className={`calendar-cell ${!isValid || isLocked ? 'calendar-cell-unavailable' : ''} ${isHoveredUserCell ? `calendar-cell-user-highlighted status-${hoveredUserStatus}` : ''} ${isBestTimeCell ? 'calendar-cell-best-time' : ''}`}
+                        style={{
+                          backgroundColor: !isHoveredUserCell ? backgroundColor : undefined,
+                          ...(isBestTimeCell && !isHoveredUserCell ? customBorderStyle : {
+                            border: !isHoveredUserCell ? (cellStatus ? `2px solid ${borderColor}` : '1px solid var(--gray-200)') : undefined,
+                          }),
+                          cursor: isLocked ? 'not-allowed' : (isValid ? 'pointer' : 'not-allowed'),
+                          opacity: isLocked && !cellStatus ? 0.6 : 1
+                        }}
+                      >
+                        {(totalAvailable > 0 || totalIfNeeded > 0 || totalUnavailable > 0) && (
+                          <div className="calendar-cell-counts">
+                            {totalAvailable > 0 && (
+                              <span className="count-available">{totalAvailable}</span>
+                            )}
+                            {totalIfNeeded > 0 && (
+                              <span className="count-if-needed">{totalIfNeeded}</span>
+                            )}
+                            {totalUnavailable > 0 && (
+                              <span className="count-unavailable">{totalUnavailable}</span>
+                            )}
+                          </div>
+                        )}
+
+                        {showTooltip && (
+                          <div className={`calendar-cell-tooltip ${showTooltip ? 'visible' : ''}`}>
+                            <div className="tooltip-users">
+                              {/* Available Section */}
+                              {(cellStatus === 'available' || usersInCell.some(a => a.status === 'available')) && (
+                                <div className="tooltip-section">
+                                  <div className="tooltip-section-header">
+                                    <span className="status-emoji">🟢</span>
+                                    <span className="tooltip-section-title">Available</span>
+                                  </div>
+                                  <div className="tooltip-user-list">
+                                    {cellStatus === 'available' && (
+                                      <div className="tooltip-user">
+                                        <div className="tooltip-user-dot"></div>
+                                        <span className="tooltip-username">
+                                          You{hasExistingData && !isEditMode ? '' : isEditMode ? ' (editing)' : ' (not saved)'}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {usersInCell
+                                      .filter(a => a.status === 'available')
+                                      .map(avail => (
+                                        <div key={avail.userName} className="tooltip-user">
+                                          <div className="tooltip-user-dot"></div>
+                                          <span className="tooltip-username">
+                                            {avail.userName}
+                                          </span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* If Needed Section */}
+                              {(cellStatus === 'if-needed' || usersInCell.some(a => a.status === 'if-needed')) && (
+                                <div className="tooltip-section">
+                                  <div className="tooltip-section-header">
+                                    <span className="status-emoji">🟡</span>
+                                    <span className="tooltip-section-title">If Needed</span>
+                                  </div>
+                                  <div className="tooltip-user-list">
+                                    {cellStatus === 'if-needed' && (
+                                      <div className="tooltip-user">
+                                        <div className="tooltip-user-dot"></div>
+                                        <span className="tooltip-username">
+                                          You{hasExistingData && !isEditMode ? '' : isEditMode ? ' (editing)' : ' (not saved)'}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {usersInCell
+                                      .filter(a => a.status === 'if-needed')
+                                      .map(avail => (
+                                        <div key={avail.userName} className="tooltip-user">
+                                          <div className="tooltip-user-dot"></div>
+                                          <span className="tooltip-username">
+                                            {avail.userName}
+                                          </span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Unavailable Section */}
+                              {(cellStatus === 'unavailable' || usersInCell.some(a => a.status === 'unavailable')) && (
+                                <div className="tooltip-section">
+                                  <div className="tooltip-section-header">
+                                    <span className="status-emoji">⚫</span>
+                                    <span className="tooltip-section-title">Unavailable</span>
+                                  </div>
+                                  <div className="tooltip-user-list">
+                                    {cellStatus === 'unavailable' && (
+                                      <div className="tooltip-user">
+                                        <div className="tooltip-user-dot"></div>
+                                        <span className="tooltip-username">
+                                          You{hasExistingData && !isEditMode ? '' : isEditMode ? ' (editing)' : ' (not saved)'}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {usersInCell
+                                      .filter(a => a.status === 'unavailable')
+                                      .map(avail => (
+                                        <div key={avail.userName} className="tooltip-user">
+                                          <div className="tooltip-user-dot"></div>
+                                          <span className="tooltip-username">
+                                            {avail.userName}
+                                          </span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
-
-      {userName && !isSaving && isEditMode && !isEditingExisting && (
-        <div className="calendar-instructions">
-          💡 Select a status above, then click and drag to mark your availability. Hover over cells to see who's available.
-        </div>
-      )}
-
-      {userName && !isSaving && isEditMode && isEditingExisting && (
-        <div className="calendar-instructions" style={{
-          background: '#dbeafe',
-          borderColor: '#3b82f6',
-          color: '#1e40af'
-        }}>
-          ✏️ You're editing your previous selections. Choose a status and click cells to update, then click "Update Availability" to save.
-        </div>
-      )}
-
-      {userName && hasExistingData && !isEditMode && (
-        <div className="calendar-instructions" style={{
-          background: '#f0fdf4',
-          borderColor: '#86efac',
-          color: '#166534'
-        }}>
-          ✓ Your availability is displayed below. Click "Edit Availability" to make changes.
-        </div>
-      )}
     </div>
   );
 }
