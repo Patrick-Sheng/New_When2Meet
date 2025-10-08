@@ -1014,8 +1014,6 @@ body {
   }
 }
 
-/* Add these styles to your index.css at the end */
-
 /* Status Selection Buttons */
 .status-selector-container {
   margin-top: 1rem;
@@ -1150,8 +1148,6 @@ body {
   }
 }
 
-/* Add these styles to src/index.css after the existing tooltip styles */
-
 /* Tooltip Sections for Multi-Status Display */
 .tooltip-section {
   margin-bottom: 8px;
@@ -1197,13 +1193,9 @@ body {
 
 /* Footer Styles */
 
-/* Footer Styles - Add to the end of your index.css */
-
 /* Make the app container a flex container */
 .app-container {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
 /* Allow main content to grow and push footer down */
