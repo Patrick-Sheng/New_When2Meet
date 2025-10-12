@@ -44,7 +44,7 @@ function Footer() {
 
       <div className="footer-bottom">
         <p className="footer-sponsored">
-          Sponsored by: Regan Ong
+          Sponsored by: Ricky Wen & Regan Ong
         </p>
         <p className="footer-copyright">
           © {currentYear} ComIt. All rights reserved.
